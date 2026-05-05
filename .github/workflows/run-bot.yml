@@ -22,15 +22,22 @@ jobs:
           echo "Branch: $GITHUB_REF_NAME"
           echo "Workflows encontrados:"
           find .github/workflows -maxdepth 1 -type f | sort
-          echo "Modelo no codigo:"
+          echo "Modelo Google AI no codigo:"
           grep -n "GOOGLE_AI_MODEL" bot.py || true
-          echo "SDK Google instalado no requirements:"
-          grep -n "google" requirements.txt || true
+          echo "Modelo Whisper no codigo:"
+          grep -n "WHISPER_MODEL_SIZE" bot.py || true
+          echo "Dependencias instaladas:"
+          grep -n "google\|whisper\|telegram" requirements.txt || true
 
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Instalar FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
 
       - name: Instalar dependencias
         run: |
@@ -42,4 +49,5 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemma-3-27b-it
+          WHISPER_MODEL_SIZE: tiny
         run: python bot.py
