@@ -30,6 +30,8 @@ jobs:
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
+          PAIRING_MAX_ATTEMPTS: 5
+          PAIRING_RETRY_SECONDS: 30
         run: |
           mkdir -p qr-code
           echo "Iniciando WhatsApp Web JS..."
@@ -40,7 +42,7 @@ jobs:
       - name: Aguardar login ser gerado
         run: |
           echo "Aguardando QR Code ou codigo por telefone..."
-          for i in {1..90}; do
+          for i in {1..180}; do
             if [ -f qr-code/whatsapp-qr.png ] || [ -f qr-code/pairing-code-latest.txt ]; then
               echo "Login gerado."
               echo "================ LOG ATUAL ================"
@@ -48,15 +50,16 @@ jobs:
               echo "==========================================="
               exit 0
             fi
-            echo "Aguardando... tentativa $i/90"
-            tail -n 20 whatsapp.log || true
+            echo "Aguardando... tentativa $i/180"
+            tail -n 25 whatsapp.log || true
             sleep 2
           done
-          echo "Nao gerou QR/codigo dentro do tempo esperado."
-          cat whatsapp.log || true
-          exit 1
+          echo "Nao gerou QR/codigo dentro do tempo esperado. Mesmo assim vou exportar os logs."
+          mkdir -p qr-code
+          cp whatsapp.log qr-code/whatsapp.log || true
+          exit 0
 
-      - name: Exportar QR Code ou codigo
+      - name: Exportar QR Code, codigo ou logs
         uses: actions/upload-artifact@v4
         with:
           name: whatsapp-login-code
@@ -76,12 +79,12 @@ jobs:
           fi
           echo "Logs atuais:" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 80 whatsapp.log >> $GITHUB_STEP_SUMMARY || true
+          tail -n 100 whatsapp.log >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
 
       - name: Manter bot rodando
         run: |
-          echo "Bot rodando. Abra Artifacts > whatsapp-login-code para baixar o QR/codigo."
+          echo "Bot rodando. Abra Artifacts > whatsapp-login-code para baixar o QR/codigo/logs."
           echo "Logs em tempo real:"
           tail -f whatsapp.log &
           sleep 21000
