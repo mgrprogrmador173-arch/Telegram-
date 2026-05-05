@@ -3,6 +3,9 @@ name: Rodar WhatsApp Web JS
 on:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 concurrency:
   group: whatsapp-webjs
   cancel-in-progress: true
@@ -15,6 +18,8 @@ jobs:
     steps:
       - name: Baixar codigo
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
 
       - name: Configurar Node
         uses: actions/setup-node@v4
@@ -29,62 +34,52 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
-          WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
-          PAIRING_MAX_ATTEMPTS: 5
-          PAIRING_RETRY_SECONDS: 30
+          FORCE_QR_MODE: 'true'
         run: |
           mkdir -p qr-code
-          echo "Iniciando WhatsApp Web JS..."
+          echo "Iniciando WhatsApp Web JS em modo QR direto..."
           nohup npm run start:whatsapp > whatsapp.log 2>&1 &
           echo $! > whatsapp.pid
           echo "PID do bot: $(cat whatsapp.pid)"
 
-      - name: Aguardar login ser gerado
+      - name: Aguardar QR PNG
         run: |
-          echo "Aguardando QR Code ou codigo por telefone..."
-          for i in {1..180}; do
-            if [ -f qr-code/whatsapp-qr.png ] || [ -f qr-code/pairing-code-latest.txt ]; then
-              echo "Login gerado."
-              echo "================ LOG ATUAL ================"
+          echo "Aguardando qr-code/qr-latest.png..."
+          for i in {1..120}; do
+            if [ -f qr-code/qr-latest.png ]; then
+              echo "QR PNG gerado."
               cat whatsapp.log || true
-              echo "==========================================="
               exit 0
             fi
-            echo "Aguardando... tentativa $i/180"
+            echo "Aguardando... tentativa $i/120"
             tail -n 25 whatsapp.log || true
             sleep 2
           done
-          echo "Nao gerou QR/codigo dentro do tempo esperado. Mesmo assim vou exportar os logs."
-          mkdir -p qr-code
-          cp whatsapp.log qr-code/whatsapp.log || true
-          exit 0
+          echo "Nao gerou QR PNG dentro do tempo esperado."
+          cat whatsapp.log || true
+          exit 1
 
-      - name: Exportar QR Code, codigo ou logs
-        uses: actions/upload-artifact@v4
-        with:
-          name: whatsapp-login-code
-          path: qr-code/
-
-      - name: Mostrar codigo no resumo
+      - name: Publicar QR PNG no repositorio
         run: |
-          echo "## WhatsApp Login" >> $GITHUB_STEP_SUMMARY
-          if [ -f qr-code/pairing-code-latest.txt ]; then
-            echo "Codigo por telefone:" >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-            cat qr-code/pairing-code-latest.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
-          fi
-          if [ -f qr-code/whatsapp-qr.png ]; then
-            echo "QR Code exportado em Artifacts: whatsapp-login-code" >> $GITHUB_STEP_SUMMARY
-          fi
-          echo "Logs atuais:" >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 100 whatsapp.log >> $GITHUB_STEP_SUMMARY || true
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qr-code/*.png
+          git commit -m "Update WhatsApp QR code" || echo "Sem alteracoes para commitar"
+          git pull --rebase || true
+          git push || true
+
+      - name: Mostrar link direto
+        run: |
+          echo "## QR Code direto" >> $GITHUB_STEP_SUMMARY
+          echo "Abra este link no celular:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Se a imagem nao atualizar, feche e abra o link novamente." >> $GITHUB_STEP_SUMMARY
 
       - name: Manter bot rodando
         run: |
-          echo "Bot rodando. Abra Artifacts > whatsapp-login-code para baixar o QR/codigo/logs."
-          echo "Logs em tempo real:"
+          echo "Bot rodando. Abra o QR direto:"
+          echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
           tail -f whatsapp.log &
           sleep 21000
