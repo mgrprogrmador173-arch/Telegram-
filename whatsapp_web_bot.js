@@ -8,7 +8,8 @@ const { GoogleGenAI } = require('@google/genai');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash-lite';
 const QR_DIR = process.env.QR_DIR || 'qr-code';
-const WHATSAPP_PAIRING_NUMBER = process.env.WHATSAPP_PAIRING_NUMBER || '';
+const WHATSAPP_PAIRING_NUMBER_RAW = process.env.WHATSAPP_PAIRING_NUMBER || '';
+const WHATSAPP_PAIRING_NUMBER = WHATSAPP_PAIRING_NUMBER_RAW.replace(/\D/g, '');
 
 if (!GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY nao encontrada nos Secrets.');
@@ -65,46 +66,7 @@ async function gerarResposta(userId, texto) {
   return resposta;
 }
 
-const client = new Client({
-  authStrategy: new LocalAuth({ clientId: 'mgr-whatsapp-webjs' }),
-  puppeteer: {
-    headless: true,
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-    ],
-  },
-});
-
-client.on('qr', async (qr) => {
-  if (WHATSAPP_PAIRING_NUMBER) {
-    if (pairingRequested) {
-      console.log('Novo QR ignorado porque o modo de conexao por numero esta ativo.');
-      return;
-    }
-
-    pairingRequested = true;
-    try {
-      const code = await client.requestPairingCode(WHATSAPP_PAIRING_NUMBER, true);
-      const codePath = path.join(QR_DIR, 'pairing-code.txt');
-      fs.writeFileSync(codePath, code, 'utf8');
-      console.log('============================================================');
-      console.log('CODIGO PARA CONECTAR COM NUMERO:');
-      console.log(code);
-      console.log('Use imediatamente no WhatsApp:');
-      console.log('Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone');
-      console.log('Se der erro, cancele esta execucao e rode de novo para gerar codigo novo.');
-      console.log('============================================================');
-      return;
-    } catch (error) {
-      console.error('Nao consegui gerar codigo por numero.', error);
-      console.log('Como WHATSAPP_PAIRING_NUMBER esta configurado, nao vou gerar QR Code infinito.');
-      return;
-    }
-  }
-
+async function salvarQr(qr) {
   if (qrAlreadyGenerated) {
     console.log('QR Code novo ignorado para evitar loop infinito. Rode o workflow de novo se precisar de outro QR.');
     return;
@@ -127,6 +89,51 @@ client.on('qr', async (qr) => {
 
   console.log('QR Code salvo em:');
   console.log(pngPath);
+}
+
+const client = new Client({
+  authStrategy: new LocalAuth({ clientId: 'mgr-whatsapp-webjs' }),
+  puppeteer: {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+    ],
+  },
+});
+
+client.on('qr', async (qr) => {
+  if (WHATSAPP_PAIRING_NUMBER) {
+    if (pairingRequested) {
+      console.log('Novo QR ignorado porque ja tentei gerar codigo por numero.');
+      return;
+    }
+
+    pairingRequested = true;
+    try {
+      console.log(`Tentando gerar codigo para numero terminado em ${WHATSAPP_PAIRING_NUMBER.slice(-4)}...`);
+      const code = await client.requestPairingCode(WHATSAPP_PAIRING_NUMBER);
+      const codePath = path.join(QR_DIR, 'pairing-code.txt');
+      fs.writeFileSync(codePath, code, 'utf8');
+      console.log('============================================================');
+      console.log('CODIGO PARA CONECTAR COM NUMERO:');
+      console.log(code);
+      console.log('Use imediatamente no WhatsApp:');
+      console.log('Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone');
+      console.log('Se der erro, cancele esta execucao e rode de novo para gerar codigo novo.');
+      console.log('============================================================');
+      return;
+    } catch (error) {
+      console.error('Nao consegui gerar codigo por numero. Vou gerar apenas 1 QR Code como alternativa.');
+      console.error(error && error.stack ? error.stack : error);
+      await salvarQr(qr);
+      return;
+    }
+  }
+
+  await salvarQr(qr);
 });
 
 client.on('ready', () => {
