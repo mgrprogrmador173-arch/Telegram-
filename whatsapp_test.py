@@ -1,9 +1,11 @@
 import os
 import logging
 import requests
+from pathlib import Path
 from flask import Flask, request
 from google import genai
 from dotenv import load_dotenv
+from audio_reply import criar_audio_resposta
 
 load_dotenv()
 
@@ -22,7 +24,6 @@ if not GEMINI_API_KEY:
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 app = Flask(__name__)
-
 logging.basicConfig(level=logging.INFO)
 
 SYSTEM_PROMPT = """
@@ -51,26 +52,64 @@ def gerar_resposta(texto: str) -> str:
     return "Certo. Me passa mais detalhes do que voce precisa para eu te ajudar melhor."
 
 
-def enviar_whatsapp(numero: str, texto: str):
+def meta_headers(json_content: bool = True):
+    headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+    if json_content:
+        headers["Content-Type"] = "application/json"
+    return headers
+
+
+def enviar_whatsapp_texto(numero: str, texto: str):
     url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
-    headers = {
-        "Authorization": f"Bearer {WHATSAPP_TOKEN}",
-        "Content-Type": "application/json",
-    }
     payload = {
         "messaging_product": "whatsapp",
         "to": numero,
         "type": "text",
         "text": {"body": texto[:4000]},
     }
-    r = requests.post(url, headers=headers, json=payload, timeout=30)
-    logging.info("Resposta Meta: %s %s", r.status_code, r.text)
+    r = requests.post(url, headers=meta_headers(), json=payload, timeout=30)
+    logging.info("Resposta Meta texto: %s %s", r.status_code, r.text)
     r.raise_for_status()
+
+
+def subir_audio_meta(caminho_audio: str) -> str:
+    url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/media"
+    data = {"messaging_product": "whatsapp", "type": "audio/mpeg"}
+    with open(caminho_audio, "rb") as f:
+        files = {"file": ("resposta.mp3", f, "audio/mpeg")}
+        r = requests.post(url, headers=meta_headers(False), data=data, files=files, timeout=60)
+    logging.info("Upload audio Meta: %s %s", r.status_code, r.text)
+    r.raise_for_status()
+    return r.json()["id"]
+
+
+def enviar_whatsapp_audio(numero: str, media_id: str):
+    url = f"https://graph.facebook.com/v19.0/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": numero,
+        "type": "audio",
+        "audio": {"id": media_id},
+    }
+    r = requests.post(url, headers=meta_headers(), json=payload, timeout=30)
+    logging.info("Resposta Meta audio: %s %s", r.status_code, r.text)
+    r.raise_for_status()
+
+
+def responder_com_audio(numero: str, texto_resposta: str):
+    caminho_audio = None
+    try:
+        caminho_audio = criar_audio_resposta(texto_resposta)
+        media_id = subir_audio_meta(caminho_audio)
+        enviar_whatsapp_audio(numero, media_id)
+    finally:
+        if caminho_audio:
+            Path(caminho_audio).unlink(missing_ok=True)
 
 
 @app.get("/")
 def home():
-    return "MGR WhatsApp test bot rodando."
+    return "MGR WhatsApp test bot rodando com resposta em audio."
 
 
 @app.get("/webhook")
@@ -90,6 +129,7 @@ def receber_mensagem():
     data = request.get_json(silent=True) or {}
     logging.info("Webhook recebido: %s", data)
 
+    numero = None
     try:
         entry = data.get("entry", [])[0]
         changes = entry.get("changes", [])[0]
@@ -106,12 +146,17 @@ def receber_mensagem():
         if tipo == "text":
             texto = msg.get("text", {}).get("body", "")
             resposta = gerar_resposta(texto)
-            enviar_whatsapp(numero, resposta)
+            responder_com_audio(numero, resposta)
         else:
-            enviar_whatsapp(numero, "Por enquanto, neste teste do WhatsApp, consigo responder mensagens de texto. Pode me mandar em texto?")
+            enviar_whatsapp_texto(numero, "Por enquanto, neste teste, respondo em audio quando voce me manda texto. Pode mandar sua pergunta em texto?")
 
     except Exception as e:
         logging.exception("Erro no webhook: %s", e)
+        if numero:
+            try:
+                enviar_whatsapp_texto(numero, "Tive um problema para responder em audio agora. Pode tentar novamente?")
+            except Exception:
+                pass
 
     return "ok", 200
 
