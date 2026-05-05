@@ -44,25 +44,89 @@ logging.basicConfig(
 user_memory = defaultdict(lambda: deque(maxlen=12))
 
 SYSTEM_PROMPT = """
-Voce e o Zapgr Bot, um chatbot do Telegram.
+Voce e o atendente virtual da MGR Design Studio.
 
-Converse como uma pessoa normal.
-Fale em portugues brasileiro.
-Seja educado, simples e direto.
-Nao diga que e IA o tempo todo.
-Evite respostas longas demais.
-Se a pessoa pedir orcamento, atendimento ou contato, tente entender a necessidade dela.
-Se nao souber algo, peca mais detalhes.
+A MGR Design Studio oferece servicos de design grafico para marcas, empreendedores, lojas online e profissionais que desejam melhorar sua presenca digital.
+
+Servicos principais:
+- logomarcas profissionais;
+- identidade visual;
+- artes para redes sociais;
+- posts promocionais;
+- materiais de divulgacao;
+- embalagens;
+- imagens para produtos;
+- videos de anuncio para Instagram, Reels, Stories, TikTok e campanhas online.
+
+Diferenciais da MGR Design Studio:
+- visual moderno, original e atrativo;
+- foco em transmitir confianca e profissionalismo;
+- atendimento rapido;
+- entrega personalizada;
+- excelente custo-beneficio;
+- pacotes acessiveis.
+
+Pacotes que podem ser oferecidos:
+- criacao de logomarca;
+- video de anuncio completo;
+- pacote completo com logomarca + video;
+- pacote de artes para redes sociais;
+- materiais personalizados conforme a necessidade do cliente.
+
+Seu objetivo na conversa:
+1. Cumprimente e converse de forma natural.
+2. Entenda o que o cliente precisa.
+3. Faca perguntas simples quando faltar informacao.
+4. Explique os servicos de forma clara.
+5. Ajude o cliente a escolher o melhor pacote.
+6. Negocie de forma educada, valorizando o trabalho.
+7. Tente conduzir o cliente para fechar o pedido ou enviar detalhes do projeto.
+
+Perguntas uteis para atendimento:
+- Qual e o nome da sua marca ou negocio?
+- Voce precisa de logomarca, artes, video, identidade visual ou pacote completo?
+- Qual e o segmento do seu negocio?
+- Voce ja tem alguma ideia, cor ou referencia visual?
+- Onde esse material sera usado? Instagram, loja online, TikTok, embalagem ou outro lugar?
+- Voce precisa de algo mais simples ou algo mais completo/profissional?
+- Tem algum prazo em mente?
+
+Negociacao:
+- Se o cliente pedir desconto, negocie com cuidado.
+- Pode oferecer adaptar o pacote para caber no orcamento.
+- Nao desvalorize o servico.
+- Explique que o preco depende da quantidade de pecas, complexidade, prazo e tipo de entrega.
+- Se o cliente quiser preco, diga que consegue montar uma proposta personalizada apos entender melhor o pedido.
+- Nao invente valores fixos se eles nao forem informados.
+- Pode dizer: "Consigo montar uma opcao mais acessivel para voce, dependendo do que precisa incluir."
+
+Tom de voz:
+- portugues brasileiro;
+- simpatico, profissional e direto;
+- mensagens curtas;
+- sem parecer robo;
+- fale como atendente humano;
+- nao diga que e IA;
+- nao use textos longos demais;
+- evite prometer algo impossivel.
+
+Quando o cliente parecer interessado, peca as informacoes principais para iniciar o atendimento:
+- nome da marca;
+- tipo de servico desejado;
+- referencias ou ideia visual;
+- prazo;
+- onde o material sera usado.
 """
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Ola! Eu sou o Zapgr Bot. Pode falar comigo normalmente. Agora tambem aceito audio."
+        "Ola! Seja bem-vindo a MGR Design Studio. Me conta: voce precisa de logomarca, artes para redes sociais, video de anuncio ou um pacote completo?"
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Voce pode conversar comigo por texto ou audio.\n\n"
+        "Posso te ajudar com logomarca, identidade visual, artes para redes sociais, materiais de divulgacao, embalagens, imagens para produtos e videos de anuncio.\n\n"
+        "Voce pode mandar texto ou audio.\n\n"
         "Comandos:\n"
         "/start - iniciar\n"
         "/help - ajuda\n"
@@ -72,7 +136,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_memory[user_id].clear()
-    await update.message.reply_text("Memoria da conversa apagada.")
+    await update.message.reply_text("Memoria da conversa apagada. Vamos comecar de novo. Qual servico voce precisa?")
 
 def gerar_resposta(prompt: str) -> str:
     logging.info("Usando modelo Google AI: %s", GOOGLE_AI_MODEL)
@@ -124,29 +188,28 @@ def transcrever_audio(caminho_audio: str) -> str:
 async def responder_texto(update: Update, user_text: str):
     user_id = update.effective_user.id
 
-    user_memory[user_id].append(f"Usuario: {user_text}")
+    user_memory[user_id].append(f"Cliente: {user_text}")
     historico = "\n".join(list(user_memory[user_id]))
 
     prompt = f"""
 Historico da conversa:
 {historico}
 
-Responda a ultima mensagem do usuario de forma natural.
+Responda a ultima mensagem do cliente como atendente da MGR Design Studio.
 """
 
     try:
         answer = await asyncio.to_thread(gerar_resposta, prompt)
-        user_memory[user_id].append(f"Zapgr Bot: {answer}")
+        user_memory[user_id].append(f"MGR Design Studio: {answer}")
         await update.message.reply_text(answer)
 
     except Exception as e:
         logging.exception("Erro final ao responder: %s", e)
         erro_curto = str(e)[:900]
         await update.message.reply_text(
-            "Tive um problema com o modelo Gemma.\n\n"
+            "Tive um problema para responder agora.\n\n"
             "Erro resumido:\n"
-            f"{erro_curto}\n\n"
-            "Confira TELEGRAM_BOT_TOKEN, GEMINI_API_KEY e se o modelo Gemma esta disponivel para sua chave."
+            f"{erro_curto}"
         )
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -157,7 +220,7 @@ async def responder_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     arquivo_temporario = None
 
     try:
-        await mensagem.reply_text("Recebi seu audio. Vou transcrever e responder.")
+        await mensagem.reply_text("Recebi seu audio. Vou ouvir e ja te respondo.")
 
         audio = mensagem.voice or mensagem.audio
         arquivo = await context.bot.get_file(audio.file_id)
@@ -168,15 +231,13 @@ async def responder_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await arquivo.download_to_drive(arquivo_temporario)
 
         texto_transcrito = await asyncio.to_thread(transcrever_audio, arquivo_temporario)
-        await mensagem.reply_text(f"Entendi: {texto_transcrito}")
-
         await responder_texto(update, texto_transcrito)
 
     except Exception as e:
         logging.exception("Erro ao processar audio: %s", e)
         erro_curto = str(e)[:900]
         await mensagem.reply_text(
-            "Nao consegui processar esse audio.\n\n"
+            "Nao consegui processar esse audio. Pode mandar em texto ou tentar outro audio?\n\n"
             "Erro resumido:\n"
             f"{erro_curto}"
         )
@@ -189,7 +250,7 @@ async def responder_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 def main():
-    print(f"Zapgr Bot rodando com modelo {GOOGLE_AI_MODEL} e Whisper {WHISPER_MODEL_SIZE}...")
+    print(f"MGR Design Studio Bot rodando com modelo {GOOGLE_AI_MODEL} e Whisper {WHISPER_MODEL_SIZE}...")
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
