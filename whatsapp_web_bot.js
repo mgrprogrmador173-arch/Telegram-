@@ -10,6 +10,8 @@ const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash-lite';
 const QR_DIR = process.env.QR_DIR || 'qr-code';
 const WHATSAPP_PAIRING_NUMBER_RAW = process.env.WHATSAPP_PAIRING_NUMBER || '';
 const WHATSAPP_PAIRING_NUMBER = WHATSAPP_PAIRING_NUMBER_RAW.replace(/\D/g, '');
+const PAIRING_MAX_ATTEMPTS = Number(process.env.PAIRING_MAX_ATTEMPTS || 5);
+const PAIRING_RETRY_SECONDS = Number(process.env.PAIRING_RETRY_SECONDS || 45);
 
 if (!GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY nao encontrada nos Secrets.');
@@ -19,8 +21,10 @@ fs.mkdirSync(QR_DIR, { recursive: true });
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const memory = new Map();
-let pairingRequested = false;
+let pairingStarted = false;
+let isReady = false;
 let qrAlreadyGenerated = false;
+let lastQr = null;
 
 const SYSTEM_PROMPT = `
 Voce e o atendente virtual da MGR Design Studio.
@@ -43,6 +47,10 @@ Regras:
 - Negocie sem desvalorizar o servico.
 - Se faltar informacao, pergunte apenas uma ou duas coisas por vez.
 `;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function addMemory(userId, line) {
   if (!memory.has(userId)) memory.set(userId, []);
@@ -104,39 +112,59 @@ const client = new Client({
   },
 });
 
-client.on('qr', async (qr) => {
-  if (WHATSAPP_PAIRING_NUMBER) {
-    if (pairingRequested) {
-      console.log('Novo QR ignorado porque ja tentei gerar codigo por numero.');
-      return;
-    }
+async function gerarCodigosPorNumero() {
+  if (!WHATSAPP_PAIRING_NUMBER || pairingStarted) return;
+  pairingStarted = true;
 
-    pairingRequested = true;
+  console.log(`Modo codigo por telefone ativo. Numero terminado em ${WHATSAPP_PAIRING_NUMBER.slice(-4)}.`);
+  console.log(`Vou tentar gerar ate ${PAIRING_MAX_ATTEMPTS} codigos, com intervalo de ${PAIRING_RETRY_SECONDS}s.`);
+
+  for (let attempt = 1; attempt <= PAIRING_MAX_ATTEMPTS; attempt++) {
+    if (isReady) return;
+
     try {
-      console.log(`Tentando gerar codigo para numero terminado em ${WHATSAPP_PAIRING_NUMBER.slice(-4)}...`);
-      const code = await client.requestPairingCode(WHATSAPP_PAIRING_NUMBER);
-      const codePath = path.join(QR_DIR, 'pairing-code.txt');
-      fs.writeFileSync(codePath, code, 'utf8');
       console.log('============================================================');
+      console.log(`TENTATIVA ${attempt}/${PAIRING_MAX_ATTEMPTS} - GERANDO CODIGO...`);
+      const code = await client.requestPairingCode(WHATSAPP_PAIRING_NUMBER);
+      const codePath = path.join(QR_DIR, `pairing-code-${attempt}.txt`);
+      fs.writeFileSync(codePath, code, 'utf8');
+      fs.writeFileSync(path.join(QR_DIR, 'pairing-code-latest.txt'), code, 'utf8');
       console.log('CODIGO PARA CONECTAR COM NUMERO:');
       console.log(code);
       console.log('Use imediatamente no WhatsApp:');
       console.log('Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone');
-      console.log('Se der erro, cancele esta execucao e rode de novo para gerar codigo novo.');
       console.log('============================================================');
-      return;
     } catch (error) {
-      console.error('Nao consegui gerar codigo por numero. Vou gerar apenas 1 QR Code como alternativa.');
-      console.error(error && error.stack ? error.stack : error);
-      await salvarQr(qr);
-      return;
+      console.error(`Tentativa ${attempt} falhou ao gerar codigo.`);
+      console.error(error && error.message ? error.message : error);
     }
+
+    if (attempt < PAIRING_MAX_ATTEMPTS) {
+      console.log(`Aguardando ${PAIRING_RETRY_SECONDS}s antes de tentar novo codigo...`);
+      await sleep(PAIRING_RETRY_SECONDS * 1000);
+    }
+  }
+
+  console.log('Acabaram as tentativas de codigo por telefone.');
+  if (lastQr) {
+    console.log('Como alternativa, vou salvar apenas 1 QR Code.');
+    await salvarQr(lastQr);
+  }
+}
+
+client.on('qr', async (qr) => {
+  lastQr = qr;
+
+  if (WHATSAPP_PAIRING_NUMBER) {
+    await gerarCodigosPorNumero();
+    return;
   }
 
   await salvarQr(qr);
 });
 
 client.on('ready', () => {
+  isReady = true;
   console.log('MGR WhatsApp Web JS Bot conectado e rodando.');
 });
 
