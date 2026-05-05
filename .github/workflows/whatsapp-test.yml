@@ -41,6 +41,20 @@ jobs:
           TTS_SPEED: '1.5'
           PORT: 8080
         run: |
-          python whatsapp_test.py &
+          python whatsapp_test.py > flask.log 2>&1 &
           sleep 5
-          ./cloudflared tunnel --url http://localhost:8080
+          ./cloudflared tunnel --url http://localhost:8080 2>&1 | tee cloudflared.log &
+          sleep 12
+          echo ""
+          echo "============================================================"
+          echo "URL TEMPORARIA DO WHATSAPP:"
+          grep -o 'https://[-a-zA-Z0-9.]*trycloudflare.com' cloudflared.log | head -n 1 || true
+          echo ""
+          echo "USE NA META ASSIM:"
+          URL=$(grep -o 'https://[-a-zA-Z0-9.]*trycloudflare.com' cloudflared.log | head -n 1 || true)
+          if [ -n "$URL" ]; then echo "$URL/webhook"; fi
+          echo "============================================================"
+          echo ""
+          echo "Logs do Flask:"
+          cat flask.log || true
+          wait
