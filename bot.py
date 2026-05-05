@@ -10,14 +10,16 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 
 load_dotenv()
 
-# Token temporario de teste. Em producao, use o Secret TELEGRAM_BOT_TOKEN.
-TELEGRAM_BOT_TOKEN = os.getenv(
-    "TELEGRAM_BOT_TOKEN",
-    "8520407101:AAGyWeBw6Mqa63RYCShe4IgJ1bxpiD_vnFg"
-)
-
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+# Modelo Gemma pela API do Google AI Studio.
+GOOGLE_AI_MODEL = os.getenv("GOOGLE_AI_MODEL", "gemma-3-27b-it")
+
+if not TELEGRAM_BOT_TOKEN:
+    raise RuntimeError(
+        "TELEGRAM_BOT_TOKEN nao encontrado. Defina TELEGRAM_BOT_TOKEN nos Secrets do GitHub."
+    )
 
 if not GEMINI_API_KEY:
     raise RuntimeError(
@@ -65,7 +67,7 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Memoria da conversa apagada.")
 
 def gerar_resposta(prompt: str) -> str:
-    logging.info("Usando modelo Gemini: %s", GEMINI_MODEL)
+    logging.info("Usando modelo Google AI: %s", GOOGLE_AI_MODEL)
 
     conteudo = f"""
 {SYSTEM_PROMPT}
@@ -74,14 +76,14 @@ def gerar_resposta(prompt: str) -> str:
 """
 
     response = client.models.generate_content(
-        model=GEMINI_MODEL,
+        model=GOOGLE_AI_MODEL,
         contents=conteudo,
     )
 
     if response and getattr(response, "text", None):
         return response.text.strip()
 
-    raise RuntimeError("Resposta vazia da Gemini.")
+    raise RuntimeError("Resposta vazia do modelo.")
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -106,14 +108,14 @@ Responda a ultima mensagem do usuario de forma natural.
         logging.exception("Erro final ao responder: %s", e)
         erro_curto = str(e)[:900]
         await update.message.reply_text(
-            "Tive um problema com a Gemini.\n\n"
+            "Tive um problema com o modelo Gemma.\n\n"
             "Erro resumido:\n"
             f"{erro_curto}\n\n"
-            "Confira se o Secret GEMINI_API_KEY esta correto e se a API Gemini esta ativa."
+            "Confira TELEGRAM_BOT_TOKEN, GEMINI_API_KEY e se o modelo Gemma esta disponivel para sua chave."
         )
 
 def main():
-    print(f"Zapgr Bot rodando com modelo {GEMINI_MODEL}...")
+    print(f"Zapgr Bot rodando com modelo {GOOGLE_AI_MODEL}...")
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
