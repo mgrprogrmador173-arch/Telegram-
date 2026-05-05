@@ -24,13 +24,64 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
-      - name: Rodar WhatsApp Web JS
+      - name: Iniciar bot em segundo plano
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
         run: |
-          echo "O bot vai gerar o codigo no log abaixo."
-          echo "Use imediatamente no WhatsApp: Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone."
-          npm run start:whatsapp
+          mkdir -p qr-code
+          echo "Iniciando WhatsApp Web JS..."
+          nohup npm run start:whatsapp > whatsapp.log 2>&1 &
+          echo $! > whatsapp.pid
+          echo "PID do bot: $(cat whatsapp.pid)"
+
+      - name: Aguardar login ser gerado
+        run: |
+          echo "Aguardando QR Code ou codigo por telefone..."
+          for i in {1..90}; do
+            if [ -f qr-code/whatsapp-qr.png ] || [ -f qr-code/pairing-code-latest.txt ]; then
+              echo "Login gerado."
+              echo "================ LOG ATUAL ================"
+              cat whatsapp.log || true
+              echo "==========================================="
+              exit 0
+            fi
+            echo "Aguardando... tentativa $i/90"
+            tail -n 20 whatsapp.log || true
+            sleep 2
+          done
+          echo "Nao gerou QR/codigo dentro do tempo esperado."
+          cat whatsapp.log || true
+          exit 1
+
+      - name: Exportar QR Code ou codigo
+        uses: actions/upload-artifact@v4
+        with:
+          name: whatsapp-login-code
+          path: qr-code/
+
+      - name: Mostrar codigo no resumo
+        run: |
+          echo "## WhatsApp Login" >> $GITHUB_STEP_SUMMARY
+          if [ -f qr-code/pairing-code-latest.txt ]; then
+            echo "Codigo por telefone:" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat qr-code/pairing-code-latest.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f qr-code/whatsapp-qr.png ]; then
+            echo "QR Code exportado em Artifacts: whatsapp-login-code" >> $GITHUB_STEP_SUMMARY
+          fi
+          echo "Logs atuais:" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 80 whatsapp.log >> $GITHUB_STEP_SUMMARY || true
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Manter bot rodando
+        run: |
+          echo "Bot rodando. Abra Artifacts > whatsapp-login-code para baixar o QR/codigo."
+          echo "Logs em tempo real:"
+          tail -f whatsapp.log &
+          sleep 21000
