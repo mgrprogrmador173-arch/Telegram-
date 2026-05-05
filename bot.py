@@ -9,6 +9,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 from faster_whisper import WhisperModel
+import edge_tts
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
@@ -23,6 +24,9 @@ GOOGLE_AI_MODEL = os.getenv("GOOGLE_AI_MODEL", "gemma-3-27b-it")
 # Modelo local para transcricao de audio.
 # tiny e mais leve para GitHub Actions. Pode trocar para base se quiser mais qualidade.
 WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL_SIZE", "tiny")
+
+# Voz neural em portugues do Brasil para respostas em audio.
+TTS_VOICE = os.getenv("TTS_VOICE", "pt-BR-FranciscaNeural")
 
 if not TELEGRAM_BOT_TOKEN:
     raise RuntimeError(
@@ -205,32 +209,29 @@ def transcrever_audio(caminho_audio: str) -> str:
     logging.info("Audio transcrito. Idioma: %s | Duracao: %.2fs", info.language, info.duration)
     return texto
 
-def gerar_audio_resposta(texto: str) -> str:
+async def gerar_audio_resposta(texto: str) -> str:
     texto_limpo = texto.replace("\n", " ").strip()
     if len(texto_limpo) > 900:
         texto_limpo = texto_limpo[:900]
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_file:
-        caminho_wav = wav_file.name
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as mp3_file:
+        caminho_mp3 = mp3_file.name
 
-    caminho_ogg = caminho_wav.replace(".wav", ".ogg")
+    caminho_ogg = caminho_mp3.replace(".mp3", ".ogg")
 
-    subprocess.run(
-        [
-            "espeak-ng",
-            "-v", "pt-br",
-            "-s", "155",
-            "-w", caminho_wav,
-            texto_limpo,
-        ],
-        check=True,
+    communicate = edge_tts.Communicate(
+        texto_limpo,
+        voice=TTS_VOICE,
+        rate="+5%",
+        pitch="+0Hz",
     )
+    await communicate.save(caminho_mp3)
 
     subprocess.run(
         [
             "ffmpeg",
             "-y",
-            "-i", caminho_wav,
+            "-i", caminho_mp3,
             "-c:a", "libopus",
             caminho_ogg,
         ],
@@ -239,7 +240,7 @@ def gerar_audio_resposta(texto: str) -> str:
         stderr=subprocess.DEVNULL,
     )
 
-    Path(caminho_wav).unlink(missing_ok=True)
+    Path(caminho_mp3).unlink(missing_ok=True)
     return caminho_ogg
 
 async def responder_texto(update: Update, user_text: str, responder_com_audio: bool = False):
@@ -262,8 +263,9 @@ Responda a ultima mensagem do cliente como atendente da MGR Design Studio.
         if responder_com_audio:
             caminho_audio = None
             try:
-                caminho_audio = await asyncio.to_thread(gerar_audio_resposta, answer)
-                await update.message.reply_voice(voice=open(caminho_audio, "rb"))
+                caminho_audio = await gerar_audio_resposta(answer)
+                with open(caminho_audio, "rb") as audio_file:
+                    await update.message.reply_voice(voice=audio_file)
             finally:
                 if caminho_audio:
                     Path(caminho_audio).unlink(missing_ok=True)
@@ -317,7 +319,7 @@ async def responder_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
 
 def main():
-    print(f"MGR Design Studio Bot rodando com modelo {GOOGLE_AI_MODEL} e Whisper {WHISPER_MODEL_SIZE}...")
+    print(f"MGR Design Studio Bot rodando com modelo {GOOGLE_AI_MODEL}, Whisper {WHISPER_MODEL_SIZE} e voz {TTS_VOICE}...")
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
