@@ -9,19 +9,19 @@ from telegram.ext import Application, CommandHandler, MessageHandler, ContextTyp
 
 load_dotenv()
 
-# Token temporário de teste do Telegram informado pelo usuário.
+# Token temporario de teste do Telegram informado pelo usuario.
 TELEGRAM_BOT_TOKEN = os.getenv(
     "TELEGRAM_BOT_TOKEN",
     "8520407101:AAGyWeBw6Mqa63RYCShe4IgJ1bxpiD_vnFg"
 )
 
-# Coloque sua chave Gemini no arquivo .env:
+# Coloque sua chave Gemini no Secret do GitHub Actions:
 # GEMINI_API_KEY=sua_chave_aqui
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 if not GEMINI_API_KEY:
     raise RuntimeError(
-        "GEMINI_API_KEY não encontrada. Crie um arquivo .env e coloque: GEMINI_API_KEY=sua_chave_aqui"
+        "GEMINI_API_KEY nao encontrada. Crie o Secret GEMINI_API_KEY no GitHub."
     )
 
 genai.configure(api_key=GEMINI_API_KEY)
@@ -31,73 +31,98 @@ logging.basicConfig(
     level=logging.INFO,
 )
 
-# Memória curta por usuário
 user_memory = defaultdict(lambda: deque(maxlen=12))
 
 SYSTEM_PROMPT = """
-Você é o Zapgr Bot, um chatbot do Telegram.
+Voce e o Zapgr Bot, um chatbot do Telegram.
 
 Converse como uma pessoa normal.
-Fale em português brasileiro.
+Fale em portugues brasileiro.
 Seja educado, simples e direto.
-Não diga que é IA o tempo todo.
+Nao diga que e IA o tempo todo.
 Evite respostas longas demais.
-Se a pessoa pedir orçamento, atendimento ou contato, tente entender a necessidade dela.
-Se não souber algo, peça mais detalhes.
+Se a pessoa pedir orcamento, atendimento ou contato, tente entender a necessidade dela.
+Se nao souber algo, peca mais detalhes.
 """
 
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=SYSTEM_PROMPT
-)
+# Tenta mais de um modelo, caso algum nao esteja disponivel na chave Gemini.
+GEMINI_MODELS = [
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+    "gemini-pro",
+]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Olá! Eu sou o Zapgr Bot. Pode falar comigo normalmente."
+        "Ola! Eu sou o Zapgr Bot. Pode falar comigo normalmente."
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "Você pode conversar comigo normalmente.\n\n"
+        "Voce pode conversar comigo normalmente.\n\n"
         "Comandos:\n"
         "/start - iniciar\n"
         "/help - ajuda\n"
-        "/reset - apagar memória da conversa"
+        "/reset - apagar memoria da conversa"
     )
 
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_memory[user_id].clear()
-    await update.message.reply_text("Memória da conversa apagada.")
+    await update.message.reply_text("Memoria da conversa apagada.")
+
+def gerar_resposta(prompt: str) -> str:
+    ultimo_erro = None
+
+    for model_name in GEMINI_MODELS:
+        try:
+            logging.info("Tentando modelo Gemini: %s", model_name)
+            model = genai.GenerativeModel(
+                model_name=model_name,
+                system_instruction=SYSTEM_PROMPT
+            )
+            response = model.generate_content(prompt)
+
+            if response and getattr(response, "text", None):
+                return response.text.strip()
+
+            ultimo_erro = "Resposta vazia da Gemini."
+
+        except Exception as e:
+            ultimo_erro = str(e)
+            logging.exception("Erro com modelo %s: %s", model_name, e)
+
+    raise RuntimeError(f"Falha ao chamar Gemini. Ultimo erro: {ultimo_erro}")
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_text = update.message.text
 
-    user_memory[user_id].append(f"Usuário: {user_text}")
+    user_memory[user_id].append(f"Usuario: {user_text}")
 
     historico = "\n".join(list(user_memory[user_id]))
 
     prompt = f"""
-Histórico da conversa:
+Historico da conversa:
 {historico}
 
-Responda a última mensagem do usuário de forma natural.
+Responda a ultima mensagem do usuario de forma natural.
 """
 
     try:
-        response = model.generate_content(prompt)
-
-        answer = response.text.strip() if response.text else "Não consegui gerar uma resposta agora."
-
+        answer = gerar_resposta(prompt)
         user_memory[user_id].append(f"Zapgr Bot: {answer}")
-
         await update.message.reply_text(answer)
 
     except Exception as e:
-        logging.exception(e)
+        logging.exception("Erro final ao responder: %s", e)
+        erro = str(e)
+        erro_curto = erro[:900]
         await update.message.reply_text(
-            "Tive um problema para responder agora. Verifique sua chave Gemini e tente novamente."
+            "Tive um problema com a Gemini.\n\n"
+            "Erro resumido:\n"
+            f"{erro_curto}\n\n"
+            "Confira se o Secret GEMINI_API_KEY esta correto e se a API Gemini esta ativa."
         )
 
 def main():
@@ -108,7 +133,7 @@ def main():
     app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
-    print("Zapgr Bot com Gemini está rodando...")
+    print("Zapgr Bot com Gemini esta rodando...")
     app.run_polling()
 
 if __name__ == "__main__":
