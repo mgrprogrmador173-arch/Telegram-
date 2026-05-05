@@ -6,9 +6,9 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python whatsapp_test.py
     envVars:
-      - key: WHATSAPP_TOKEN
+      - key: WHATSAPP_TOKEN=EAAN8uTyaqcgBRTMKYkMmhNWQrtqIEKZAvpWEX5ZCnFCyN2XZAD3g21ekcGT1D0ZA7N4lzWV01dR9ovSmNhyEAORm1HIfQt9NppIZCKg6THkPJeWtUNCZCIF9EHmqnZCqgoGD9cEnbX6KsYLhSC02b3hNFSSqMsg5LuGbgbNpM9CCnLPrFzyfoIdwZBFMRcgJsBTdAqVVnZA5l5djFLaQVidvsZBVCEZBWFLxZBe6nAnFWGxvsGLXzanE1QZDZD
         sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
+      - key: WHATSAPP_PHONE_NUMBER_ID=1082079474997329
         sync: false
       - key: WHATSAPP_VERIFY_TOKEN
         value: mgr-teste
