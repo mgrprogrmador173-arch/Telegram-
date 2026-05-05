@@ -21,7 +21,6 @@ jobs:
           echo "Commit: $GITHUB_SHA"
           echo "Branch: $GITHUB_REF_NAME"
           echo "Workflow Telegram pelo GitHub Actions"
-          echo "Modelo usado: gemini-2.5-flash"
           echo "Dependencias:"
           cat requirements.txt
 
@@ -34,6 +33,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Listar modelos disponiveis na key
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: |
+          python - <<'PY'
+          import os
+          from google import genai
+
+          client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+          print("Modelos disponiveis com generateContent:")
+
+          encontrados = []
+          for model in client.models.list():
+              name = getattr(model, "name", "")
+              actions = getattr(model, "supported_actions", None) or getattr(model, "supported_generation_methods", None) or []
+              text = str(actions).lower()
+              if "generate" in text or "generatecontent" in text:
+                  if "gemma" in name.lower() or "gemini" in name.lower():
+                      encontrados.append(name)
+
+          for name in encontrados:
+              print("-", name)
+
+          if not encontrados:
+              print("Nenhum modelo Gemini/Gemma encontrado na listagem.")
+          PY
 
       - name: Rodar bot Telegram
         env:
