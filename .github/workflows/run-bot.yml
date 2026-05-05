@@ -1,10 +1,11 @@
 name: Rodar Zapgr Bot
+run-name: Rodar Zapgr Bot (${{ github.ref_name }})
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: zapgr-bot
+  group: zapgr-bot-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -15,6 +16,13 @@ jobs:
     steps:
       - name: Baixar codigo
         uses: actions/checkout@v4
+
+      - name: Diagnostico de workflows no checkout
+        run: |
+          echo "Workflow em execucao: $GITHUB_WORKFLOW"
+          echo "Arquivo de workflow: $GITHUB_WORKFLOW_REF"
+          echo "Ref do checkout: $GITHUB_REF_NAME"
+          find .github/workflows -maxdepth 1 -type f -name '*.yml' -o -name '*.yaml' | sort
 
       - name: Mostrar versao do codigo
         run: |
@@ -34,5 +42,7 @@ jobs:
 
       - name: Rodar bot
         env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
         run: python bot.py

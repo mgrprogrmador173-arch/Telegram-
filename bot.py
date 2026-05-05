@@ -33,6 +33,30 @@ logging.basicConfig(
 
 user_memory = defaultdict(lambda: deque(maxlen=12))
 
+
+DEPRECATED_MODEL_MAP = {
+    "gemini-1.5-flash": "gemini-2.5-flash",
+    "models/gemini-1.5-flash": "gemini-2.5-flash",
+}
+
+
+def resolver_modelo(model_name: str) -> str:
+    normalizado = model_name.strip()
+    if normalizado.startswith("models/"):
+        normalizado = normalizado.split("models/", 1)[1]
+
+    if normalizado in DEPRECATED_MODEL_MAP:
+        novo_modelo = DEPRECATED_MODEL_MAP[normalizado]
+        logging.warning(
+            "Modelo '%s' esta descontinuado/indisponivel. Usando '%s' automaticamente.",
+            model_name,
+            novo_modelo,
+        )
+        return novo_modelo
+
+    return normalizado
+
+
 SYSTEM_PROMPT = """
 Voce e o Zapgr Bot, um chatbot do Telegram.
 
@@ -124,6 +148,8 @@ Responda a ultima mensagem do usuario de forma natural.
 
 
 def main():
+    global GEMINI_MODEL
+    GEMINI_MODEL = resolver_modelo(GEMINI_MODEL)
     validar_modelo(GEMINI_MODEL)
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
