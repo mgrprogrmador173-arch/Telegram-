@@ -21,6 +21,7 @@ jobs:
           echo "Commit: $GITHUB_SHA"
           echo "Branch: $GITHUB_REF_NAME"
           echo "Workflow Telegram pelo GitHub Actions"
+          echo "Modelo usado: gemini-2.5-flash"
           echo "Dependencias:"
           cat requirements.txt
 
@@ -38,7 +39,7 @@ jobs:
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GOOGLE_AI_MODEL: gemma-3-27b-it
+          GOOGLE_AI_MODEL: gemini-2.5-flash
           WHISPER_MODEL_SIZE: tiny
           TTS_SPEED: '1.5'
         run: python bot.py
