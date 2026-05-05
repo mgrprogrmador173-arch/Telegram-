@@ -4,27 +4,27 @@ import asyncio
 from collections import defaultdict, deque
 
 from dotenv import load_dotenv
-import google.generativeai as genai
+from google import genai
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
 
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+# Token temporario de teste. Em producao, use o Secret TELEGRAM_BOT_TOKEN.
+TELEGRAM_BOT_TOKEN = os.getenv(
+    "TELEGRAM_BOT_TOKEN",
+    "8520407101:AAGyWeBw6Mqa63RYCShe4IgJ1bxpiD_vnFg"
+)
+
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError(
-        "TELEGRAM_BOT_TOKEN nao encontrado. Defina TELEGRAM_BOT_TOKEN no ambiente ou no arquivo .env."
-    )
-
 if not GEMINI_API_KEY:
     raise RuntimeError(
-        "GEMINI_API_KEY nao encontrada. Defina GEMINI_API_KEY no ambiente ou no arquivo .env."
+        "GEMINI_API_KEY nao encontrada. Defina GEMINI_API_KEY nos Secrets do GitHub."
     )
 
-genai.configure(api_key=GEMINI_API_KEY)
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -32,30 +32,6 @@ logging.basicConfig(
 )
 
 user_memory = defaultdict(lambda: deque(maxlen=12))
-
-
-DEPRECATED_MODEL_MAP = {
-    "gemini-1.5-flash": "gemini-2.5-flash",
-    "models/gemini-1.5-flash": "gemini-2.5-flash",
-}
-
-
-def resolver_modelo(model_name: str) -> str:
-    normalizado = model_name.strip()
-    if normalizado.startswith("models/"):
-        normalizado = normalizado.split("models/", 1)[1]
-
-    if normalizado in DEPRECATED_MODEL_MAP:
-        novo_modelo = DEPRECATED_MODEL_MAP[normalizado]
-        logging.warning(
-            "Modelo '%s' esta descontinuado/indisponivel. Usando '%s' automaticamente.",
-            model_name,
-            novo_modelo,
-        )
-        return novo_modelo
-
-    return normalizado
-
 
 SYSTEM_PROMPT = """
 Voce e o Zapgr Bot, um chatbot do Telegram.
@@ -69,21 +45,10 @@ Se a pessoa pedir orcamento, atendimento ou contato, tente entender a necessidad
 Se nao souber algo, peca mais detalhes.
 """
 
-
-def validar_modelo(model_name: str) -> None:
-    try:
-        genai.get_model(f"models/{model_name}")
-    except Exception as exc:
-        raise RuntimeError(
-            f"Modelo Gemini invalido ou sem acesso: {model_name}. Ajuste GEMINI_MODEL."
-        ) from exc
-
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Ola! Eu sou o Zapgr Bot. Pode falar comigo normalmente."
     )
-
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -94,33 +59,35 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/reset - apagar memoria da conversa"
     )
 
-
 async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_memory[user_id].clear()
     await update.message.reply_text("Memoria da conversa apagada.")
 
-
 def gerar_resposta(prompt: str) -> str:
-    logging.info("Usando modelo Gemini configurado: %s", GEMINI_MODEL)
-    model = genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        system_instruction=SYSTEM_PROMPT
+    logging.info("Usando modelo Gemini: %s", GEMINI_MODEL)
+
+    conteudo = f"""
+{SYSTEM_PROMPT}
+
+{prompt}
+"""
+
+    response = client.models.generate_content(
+        model=GEMINI_MODEL,
+        contents=conteudo,
     )
-    response = model.generate_content(prompt)
 
     if response and getattr(response, "text", None):
         return response.text.strip()
 
     raise RuntimeError("Resposta vazia da Gemini.")
 
-
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     user_text = update.message.text
 
     user_memory[user_id].append(f"Usuario: {user_text}")
-
     historico = "\n".join(list(user_memory[user_id]))
 
     prompt = f"""
@@ -137,20 +104,16 @@ Responda a ultima mensagem do usuario de forma natural.
 
     except Exception as e:
         logging.exception("Erro final ao responder: %s", e)
-        erro = str(e)
-        erro_curto = erro[:900]
+        erro_curto = str(e)[:900]
         await update.message.reply_text(
             "Tive um problema com a Gemini.\n\n"
             "Erro resumido:\n"
             f"{erro_curto}\n\n"
-            "Confira GEMINI_API_KEY, GEMINI_MODEL e se a API Gemini esta ativa."
+            "Confira se o Secret GEMINI_API_KEY esta correto e se a API Gemini esta ativa."
         )
 
-
 def main():
-    global GEMINI_MODEL
-    GEMINI_MODEL = resolver_modelo(GEMINI_MODEL)
-    validar_modelo(GEMINI_MODEL)
+    print(f"Zapgr Bot rodando com modelo {GEMINI_MODEL}...")
 
     app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
@@ -159,9 +122,7 @@ def main():
     app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
-    print(f"Zapgr Bot rodando com modelo {GEMINI_MODEL}...")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
