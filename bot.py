@@ -2,6 +2,7 @@ import os
 import logging
 import asyncio
 import tempfile
+import subprocess
 from collections import defaultdict, deque
 from pathlib import Path
 
@@ -204,7 +205,44 @@ def transcrever_audio(caminho_audio: str) -> str:
     logging.info("Audio transcrito. Idioma: %s | Duracao: %.2fs", info.language, info.duration)
     return texto
 
-async def responder_texto(update: Update, user_text: str):
+def gerar_audio_resposta(texto: str) -> str:
+    texto_limpo = texto.replace("\n", " ").strip()
+    if len(texto_limpo) > 900:
+        texto_limpo = texto_limpo[:900]
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as wav_file:
+        caminho_wav = wav_file.name
+
+    caminho_ogg = caminho_wav.replace(".wav", ".ogg")
+
+    subprocess.run(
+        [
+            "espeak-ng",
+            "-v", "pt-br",
+            "-s", "155",
+            "-w", caminho_wav,
+            texto_limpo,
+        ],
+        check=True,
+    )
+
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i", caminho_wav,
+            "-c:a", "libopus",
+            caminho_ogg,
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    Path(caminho_wav).unlink(missing_ok=True)
+    return caminho_ogg
+
+async def responder_texto(update: Update, user_text: str, responder_com_audio: bool = False):
     user_id = update.effective_user.id
 
     user_memory[user_id].append(f"Cliente: {user_text}")
@@ -220,7 +258,17 @@ Responda a ultima mensagem do cliente como atendente da MGR Design Studio.
     try:
         answer = await asyncio.to_thread(gerar_resposta, prompt)
         user_memory[user_id].append(f"MGR Design Studio: {answer}")
-        await update.message.reply_text(answer)
+
+        if responder_com_audio:
+            caminho_audio = None
+            try:
+                caminho_audio = await asyncio.to_thread(gerar_audio_resposta, answer)
+                await update.message.reply_voice(voice=open(caminho_audio, "rb"))
+            finally:
+                if caminho_audio:
+                    Path(caminho_audio).unlink(missing_ok=True)
+        else:
+            await update.message.reply_text(answer)
 
     except Exception as e:
         logging.exception("Erro final ao responder: %s", e)
@@ -239,7 +287,7 @@ async def responder_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     arquivo_temporario = None
 
     try:
-        await mensagem.reply_text("Recebi seu audio. Vou ouvir e ja te respondo.")
+        await mensagem.reply_text("Recebi seu audio. Vou ouvir e te responder por audio.")
 
         audio = mensagem.voice or mensagem.audio
         arquivo = await context.bot.get_file(audio.file_id)
@@ -250,7 +298,7 @@ async def responder_audio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await arquivo.download_to_drive(arquivo_temporario)
 
         texto_transcrito = await asyncio.to_thread(transcrever_audio, arquivo_temporario)
-        await responder_texto(update, texto_transcrito)
+        await responder_texto(update, texto_transcrito, responder_com_audio=True)
 
     except Exception as e:
         logging.exception("Erro ao processar audio: %s", e)
