@@ -27,17 +27,17 @@ jobs:
           echo "Modelo Whisper no codigo:"
           grep -n "WHISPER_MODEL_SIZE" bot.py || true
           echo "Dependencias instaladas:"
-          grep -n "google\|whisper\|telegram" requirements.txt || true
+          grep -n "google\|whisper\|telegram\|pyttsx3" requirements.txt || true
 
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Instalar FFmpeg
+      - name: Instalar FFmpeg e voz local
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg espeak-ng
 
       - name: Instalar dependencias
         run: |
