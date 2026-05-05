@@ -35,6 +35,7 @@ jobs:
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
+          QR_INTERVAL_SECONDS: 60
         run: |
           mkdir -p qr-code
           nohup node whatsapp_web_loop.js > whatsapp.log 2>&1 &
@@ -45,13 +46,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          LAST_UPDATE=""
           for i in {1..1200}; do
             if [ -f qr-code/qr-latest.png ]; then
-              git add qr-code/*.png qr-code/*.txt || true
-              git commit -m "Update WhatsApp login" || true
-              git pull --rebase || true
-              git push || true
-              echo "QR publicado: https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
+              CURRENT_UPDATE=$(cat qr-code/qr-updated.txt 2>/dev/null || echo "")
+              if [ "$CURRENT_UPDATE" != "$LAST_UPDATE" ]; then
+                LAST_UPDATE="$CURRENT_UPDATE"
+                git pull --rebase || true
+                git add qr-code/*.png qr-code/*.txt || true
+                if ! git diff --cached --quiet; then
+                  git commit -m "Update WhatsApp QR"
+                  git push || (sleep 5 && git pull --rebase && git push)
+                else
+                  echo "Sem mudanca nova no QR"
+                fi
+                echo "QR publicado: https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
+              fi
             fi
             if grep -q "Bot conectado" whatsapp.log 2>/dev/null; then
               echo "WhatsApp conectado"
