@@ -8,6 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash-lite';
 const QR_DIR = process.env.QR_DIR || 'qr-code';
+const FORCE_QR_MODE = process.env.FORCE_QR_MODE === 'true';
 const WHATSAPP_PAIRING_NUMBER_RAW = process.env.WHATSAPP_PAIRING_NUMBER || '';
 const WHATSAPP_PAIRING_NUMBER = WHATSAPP_PAIRING_NUMBER_RAW.replace(/\D/g, '');
 const PAIRING_MAX_ATTEMPTS = Number(process.env.PAIRING_MAX_ATTEMPTS || 5);
@@ -82,15 +83,10 @@ async function salvarQr(qr) {
   qrcode.generate(qr, { small: true });
 
   const pngPath = path.join(QR_DIR, `qr-${numero}.png`);
-  const txtPath = path.join(QR_DIR, `qr-${numero}.txt`);
   const latestPngPath = path.join(QR_DIR, 'qr-latest.png');
-  const latestTxtPath = path.join(QR_DIR, 'qr-latest.txt');
 
   await QRCode.toFile(pngPath, qr, { type: 'png', margin: 2, width: 900 });
   await QRCode.toFile(latestPngPath, qr, { type: 'png', margin: 2, width: 900 });
-
-  fs.writeFileSync(txtPath, qr, 'utf8');
-  fs.writeFileSync(latestTxtPath, qr, 'utf8');
 
   console.log('QR Code salvo em PNG:');
   console.log(pngPath);
@@ -112,7 +108,7 @@ const client = new Client({
 });
 
 async function gerarCodigosPorNumero() {
-  if (!WHATSAPP_PAIRING_NUMBER || pairingStarted) return;
+  if (!WHATSAPP_PAIRING_NUMBER || pairingStarted || FORCE_QR_MODE) return;
   pairingStarted = true;
 
   console.log(`Modo codigo por telefone ativo. Numero terminado em ${WHATSAPP_PAIRING_NUMBER.slice(-4)}.`);
@@ -145,14 +141,17 @@ async function gerarCodigosPorNumero() {
   }
 
   console.log('Acabaram as tentativas de codigo por telefone.');
-  if (lastQr) {
-    console.log('Como alternativa, vou salvar o QR Code em PNG.');
-    await salvarQr(lastQr);
-  }
+  if (lastQr) await salvarQr(lastQr);
 }
 
 client.on('qr', async (qr) => {
   lastQr = qr;
+
+  if (FORCE_QR_MODE) {
+    console.log('FORCE_QR_MODE ativo. Salvando QR direto em PNG.');
+    await salvarQr(qr);
+    return;
+  }
 
   if (WHATSAPP_PAIRING_NUMBER) {
     await gerarCodigosPorNumero();
