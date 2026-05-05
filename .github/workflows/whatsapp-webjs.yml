@@ -29,57 +29,46 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
-      - name: Iniciar bot em segundo plano
+      - name: Iniciar bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
-          FORCE_QR_MODE: 'true'
+          WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
         run: |
           mkdir -p qr-code
-          echo "Iniciando WhatsApp Web JS em modo QR direto..."
-          nohup npm run start:whatsapp > whatsapp.log 2>&1 &
+          nohup node whatsapp_web_loop.js > whatsapp.log 2>&1 &
           echo $! > whatsapp.pid
-          echo "PID do bot: $(cat whatsapp.pid)"
+          echo "Bot iniciado"
 
-      - name: Aguardar QR PNG
-        run: |
-          echo "Aguardando qr-code/qr-latest.png..."
-          for i in {1..120}; do
-            if [ -f qr-code/qr-latest.png ]; then
-              echo "QR PNG gerado."
-              cat whatsapp.log || true
-              exit 0
-            fi
-            echo "Aguardando... tentativa $i/120"
-            tail -n 25 whatsapp.log || true
-            sleep 2
-          done
-          echo "Nao gerou QR PNG dentro do tempo esperado."
-          cat whatsapp.log || true
-          exit 1
-
-      - name: Publicar QR PNG no repositorio
+      - name: Publicar QR atualizado
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add qr-code/*.png
-          git commit -m "Update WhatsApp QR code" || echo "Sem alteracoes para commitar"
-          git pull --rebase || true
-          git push || true
+          for i in {1..1200}; do
+            if [ -f qr-code/qr-latest.png ]; then
+              git add qr-code/*.png qr-code/*.txt || true
+              git commit -m "Update WhatsApp login" || true
+              git pull --rebase || true
+              git push || true
+              echo "QR publicado: https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
+            fi
+            if grep -q "Bot conectado" whatsapp.log 2>/dev/null; then
+              echo "WhatsApp conectado"
+              break
+            fi
+            tail -n 30 whatsapp.log || true
+            sleep 10
+          done
 
       - name: Mostrar link direto
         run: |
           echo "## QR Code direto" >> $GITHUB_STEP_SUMMARY
-          echo "Abra este link no celular:" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Se a imagem nao atualizar, feche e abra o link novamente." >> $GITHUB_STEP_SUMMARY
 
       - name: Manter bot rodando
         run: |
-          echo "Bot rodando. Abra o QR direto:"
+          echo "Bot rodando"
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
           tail -f whatsapp.log &
           sleep 21000
