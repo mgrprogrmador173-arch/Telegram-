@@ -1,11 +1,10 @@
 name: Rodar Zapgr Bot
-run-name: Rodar Zapgr Bot (${{ github.ref_name }})
 
 on:
   workflow_dispatch:
 
 concurrency:
-  group: zapgr-bot-${{ github.ref }}
+  group: zapgr-bot
   cancel-in-progress: true
 
 jobs:
@@ -17,20 +16,16 @@ jobs:
       - name: Baixar codigo
         uses: actions/checkout@v4
 
-      - name: Diagnostico de workflows no checkout
+      - name: Diagnostico
         run: |
-          echo "Workflow em execucao: $GITHUB_WORKFLOW"
-          echo "Arquivo de workflow: $GITHUB_WORKFLOW_REF"
-          echo "Ref do checkout: $GITHUB_REF_NAME"
-          find .github/workflows -maxdepth 1 -type f -name '*.yml' -o -name '*.yaml' | sort
-
-      - name: Mostrar versao do codigo
-        run: |
-          echo "Commit atual: $GITHUB_SHA"
-          echo "Branch atual: $GITHUB_REF_NAME"
-          echo "Modelo configurado no bot.py:"
+          echo "Commit: $GITHUB_SHA"
+          echo "Branch: $GITHUB_REF_NAME"
+          echo "Workflows encontrados:"
+          find .github/workflows -maxdepth 1 -type f | sort
+          echo "Modelo no codigo:"
           grep -n "GEMINI_MODEL" bot.py || true
-          grep -n "gemini-" bot.py || true
+          echo "SDK Gemini instalado no requirements:"
+          grep -n "google" requirements.txt || true
 
       - name: Configurar Python
         uses: actions/setup-python@v5
@@ -38,11 +33,12 @@ jobs:
           python-version: '3.11'
 
       - name: Instalar dependencias
-        run: pip install -r requirements.txt
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
       - name: Rodar bot
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_MODEL: gemini-2.5-flash
         run: python bot.py
