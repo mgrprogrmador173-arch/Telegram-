@@ -1,0 +1,31 @@
+name: Rodar WhatsApp Web JS
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: whatsapp-webjs
+  cancel-in-progress: true
+
+jobs:
+  whatsapp-webjs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependencias
+        run: npm install
+
+      - name: Rodar WhatsApp Web JS
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GOOGLE_AI_MODEL: gemini-2.5-flash-lite
+        run: npm run start:whatsapp
