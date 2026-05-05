@@ -5,3 +5,14 @@ services:
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
+    envVars:
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_AI_MODEL
+        value: gemma-3-27b-it
+      - key: WHISPER_MODEL_SIZE
+        value: tiny
+      - key: TTS_SPEED
+        value: '1.5'
