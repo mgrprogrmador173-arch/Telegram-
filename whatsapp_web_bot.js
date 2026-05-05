@@ -19,6 +19,7 @@ fs.mkdirSync(QR_DIR, { recursive: true });
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const memory = new Map();
 let pairingRequested = false;
+let qrAlreadyGenerated = false;
 
 const SYSTEM_PROMPT = `
 Voce e o atendente virtual da MGR Design Studio.
@@ -78,7 +79,12 @@ const client = new Client({
 });
 
 client.on('qr', async (qr) => {
-  if (WHATSAPP_PAIRING_NUMBER && !pairingRequested) {
+  if (WHATSAPP_PAIRING_NUMBER) {
+    if (pairingRequested) {
+      console.log('Novo QR ignorado porque o modo de conexao por numero esta ativo.');
+      return;
+    }
+
     pairingRequested = true;
     try {
       const code = await client.requestPairingCode(WHATSAPP_PAIRING_NUMBER, true);
@@ -87,14 +93,23 @@ client.on('qr', async (qr) => {
       console.log('============================================================');
       console.log('CODIGO PARA CONECTAR COM NUMERO:');
       console.log(code);
-      console.log('Use no WhatsApp: Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone');
-      console.log('Tambem foi salvo em Artifacts > whatsapp-login-code > pairing-code.txt');
+      console.log('Use imediatamente no WhatsApp:');
+      console.log('Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone');
+      console.log('Se der erro, cancele esta execucao e rode de novo para gerar codigo novo.');
       console.log('============================================================');
       return;
     } catch (error) {
-      console.error('Nao consegui gerar codigo por numero. Vou gerar QR Code normal.', error);
+      console.error('Nao consegui gerar codigo por numero.', error);
+      console.log('Como WHATSAPP_PAIRING_NUMBER esta configurado, nao vou gerar QR Code infinito.');
+      return;
     }
   }
+
+  if (qrAlreadyGenerated) {
+    console.log('QR Code novo ignorado para evitar loop infinito. Rode o workflow de novo se precisar de outro QR.');
+    return;
+  }
+  qrAlreadyGenerated = true;
 
   console.log('Escaneie este QR Code com o WhatsApp:');
   qrcode.generate(qr, { small: true });
@@ -110,9 +125,8 @@ client.on('qr', async (qr) => {
 
   fs.writeFileSync(txtPath, qr, 'utf8');
 
-  console.log('QR Code salvo como artifact em:');
+  console.log('QR Code salvo em:');
   console.log(pngPath);
-  console.log('No celular, abra Artifacts > whatsapp-login-code e baixe whatsapp-qr.png');
 });
 
 client.on('ready', () => {
