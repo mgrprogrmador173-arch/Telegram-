@@ -11,7 +11,7 @@ const QR_DIR = process.env.QR_DIR || 'qr-code';
 const WHATSAPP_PAIRING_NUMBER_RAW = process.env.WHATSAPP_PAIRING_NUMBER || '';
 const WHATSAPP_PAIRING_NUMBER = WHATSAPP_PAIRING_NUMBER_RAW.replace(/\D/g, '');
 const PAIRING_MAX_ATTEMPTS = Number(process.env.PAIRING_MAX_ATTEMPTS || 5);
-const PAIRING_RETRY_SECONDS = Number(process.env.PAIRING_RETRY_SECONDS || 45);
+const PAIRING_RETRY_SECONDS = Number(process.env.PAIRING_RETRY_SECONDS || 30);
 
 if (!GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY nao encontrada nos Secrets.');
@@ -23,8 +23,8 @@ const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const memory = new Map();
 let pairingStarted = false;
 let isReady = false;
-let qrAlreadyGenerated = false;
 let lastQr = null;
+let qrCounter = 0;
 
 const SYSTEM_PROMPT = `
 Voce e o atendente virtual da MGR Design Studio.
@@ -75,28 +75,27 @@ async function gerarResposta(userId, texto) {
 }
 
 async function salvarQr(qr) {
-  if (qrAlreadyGenerated) {
-    console.log('QR Code novo ignorado para evitar loop infinito. Rode o workflow de novo se precisar de outro QR.');
-    return;
-  }
-  qrAlreadyGenerated = true;
+  qrCounter += 1;
+  const numero = String(qrCounter).padStart(3, '0');
 
-  console.log('Escaneie este QR Code com o WhatsApp:');
+  console.log(`Novo QR Code recebido: ${numero}`);
   qrcode.generate(qr, { small: true });
 
-  const pngPath = path.join(QR_DIR, 'whatsapp-qr.png');
-  const txtPath = path.join(QR_DIR, 'whatsapp-qr.txt');
+  const pngPath = path.join(QR_DIR, `qr-${numero}.png`);
+  const txtPath = path.join(QR_DIR, `qr-${numero}.txt`);
+  const latestPngPath = path.join(QR_DIR, 'qr-latest.png');
+  const latestTxtPath = path.join(QR_DIR, 'qr-latest.txt');
 
-  await QRCode.toFile(pngPath, qr, {
-    type: 'png',
-    margin: 2,
-    width: 900,
-  });
+  await QRCode.toFile(pngPath, qr, { type: 'png', margin: 2, width: 900 });
+  await QRCode.toFile(latestPngPath, qr, { type: 'png', margin: 2, width: 900 });
 
   fs.writeFileSync(txtPath, qr, 'utf8');
+  fs.writeFileSync(latestTxtPath, qr, 'utf8');
 
-  console.log('QR Code salvo em:');
+  console.log('QR Code salvo em PNG:');
   console.log(pngPath);
+  console.log('Ultimo QR atualizado em:');
+  console.log(latestPngPath);
 }
 
 const client = new Client({
@@ -147,7 +146,7 @@ async function gerarCodigosPorNumero() {
 
   console.log('Acabaram as tentativas de codigo por telefone.');
   if (lastQr) {
-    console.log('Como alternativa, vou salvar apenas 1 QR Code.');
+    console.log('Como alternativa, vou salvar o QR Code em PNG.');
     await salvarQr(lastQr);
   }
 }
