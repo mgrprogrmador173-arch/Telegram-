@@ -21,6 +21,11 @@ jobs:
         with:
           python-version: '3.11'
 
+      - name: Instalar FFmpeg
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Instalar dependencias
         run: |
           python -m pip install --upgrade pip
@@ -38,6 +43,7 @@ jobs:
           WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemma-3-27b-it
+          TTS_SPEED: '1.5'
           PORT: 8080
         run: |
           python whatsapp_test.py &
