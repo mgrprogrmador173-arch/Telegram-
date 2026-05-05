@@ -23,8 +23,8 @@ jobs:
           echo "Workflows encontrados:"
           find .github/workflows -maxdepth 1 -type f | sort
           echo "Modelo no codigo:"
-          grep -n "GEMINI_MODEL" bot.py || true
-          echo "SDK Gemini instalado no requirements:"
+          grep -n "GOOGLE_AI_MODEL" bot.py || true
+          echo "SDK Google instalado no requirements:"
           grep -n "google" requirements.txt || true
 
       - name: Configurar Python
@@ -39,6 +39,7 @@ jobs:
 
       - name: Rodar bot
         env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GEMINI_MODEL: gemini-2.5-flash
+          GOOGLE_AI_MODEL: gemma-3-27b-it
         run: python bot.py
