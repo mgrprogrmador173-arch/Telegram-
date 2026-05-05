@@ -3,6 +3,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import imageio_ffmpeg
+
 
 TTS_SPEED = os.getenv("TTS_SPEED", "1.5")
 
@@ -16,6 +18,7 @@ def criar_audio_resposta(texto: str) -> str:
         caminho_mp3 = mp3_file.name
 
     caminho_final = caminho_mp3.replace(".mp3", "_final.mp3")
+    ffmpeg_bin = imageio_ffmpeg.get_ffmpeg_exe()
 
     subprocess.run(
         ["gtts-cli", "--lang", "pt", "--tld", "com.br", "--output", caminho_mp3, texto_limpo],
@@ -23,7 +26,7 @@ def criar_audio_resposta(texto: str) -> str:
     )
 
     subprocess.run(
-        ["ffmpeg", "-y", "-i", caminho_mp3, "-filter:a", f"atempo={TTS_SPEED}", "-vn", caminho_final],
+        [ffmpeg_bin, "-y", "-i", caminho_mp3, "-filter:a", f"atempo={TTS_SPEED}", "-vn", caminho_final],
         check=True,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
