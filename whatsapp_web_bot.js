@@ -1,13 +1,19 @@
+const fs = require('fs');
+const path = require('path');
 const qrcode = require('qrcode-terminal');
+const QRCode = require('qrcode');
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const { GoogleGenAI } = require('@google/genai');
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash-lite';
+const QR_DIR = process.env.QR_DIR || 'qr-code';
 
 if (!GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY nao encontrada nos Secrets.');
 }
+
+fs.mkdirSync(QR_DIR, { recursive: true });
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const memory = new Map();
@@ -69,9 +75,24 @@ const client = new Client({
   },
 });
 
-client.on('qr', (qr) => {
+client.on('qr', async (qr) => {
   console.log('Escaneie este QR Code com o WhatsApp:');
   qrcode.generate(qr, { small: true });
+
+  const pngPath = path.join(QR_DIR, 'whatsapp-qr.png');
+  const txtPath = path.join(QR_DIR, 'whatsapp-qr.txt');
+
+  await QRCode.toFile(pngPath, qr, {
+    type: 'png',
+    margin: 2,
+    width: 900,
+  });
+
+  fs.writeFileSync(txtPath, qr, 'utf8');
+
+  console.log('QR Code salvo como artifact em:');
+  console.log(pngPath);
+  console.log('No celular, abra Artifacts > whatsapp-qr-code e baixe whatsapp-qr.png');
 });
 
 client.on('ready', () => {
