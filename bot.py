@@ -45,12 +45,8 @@ Se a pessoa pedir orcamento, atendimento ou contato, tente entender a necessidad
 Se nao souber algo, peca mais detalhes.
 """
 
-# Tenta mais de um modelo, caso algum nao esteja disponivel na chave Gemini.
-GEMINI_MODELS = [
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
-    "gemini-pro",
-]
+# Modelo Gemini solicitado pelo usuario.
+GEMINI_MODEL = "gemini-2.5-flash"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -72,27 +68,17 @@ async def reset(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Memoria da conversa apagada.")
 
 def gerar_resposta(prompt: str) -> str:
-    ultimo_erro = None
+    logging.info("Usando modelo Gemini: %s", GEMINI_MODEL)
+    model = genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=SYSTEM_PROMPT
+    )
+    response = model.generate_content(prompt)
 
-    for model_name in GEMINI_MODELS:
-        try:
-            logging.info("Tentando modelo Gemini: %s", model_name)
-            model = genai.GenerativeModel(
-                model_name=model_name,
-                system_instruction=SYSTEM_PROMPT
-            )
-            response = model.generate_content(prompt)
+    if response and getattr(response, "text", None):
+        return response.text.strip()
 
-            if response and getattr(response, "text", None):
-                return response.text.strip()
-
-            ultimo_erro = "Resposta vazia da Gemini."
-
-        except Exception as e:
-            ultimo_erro = str(e)
-            logging.exception("Erro com modelo %s: %s", model_name, e)
-
-    raise RuntimeError(f"Falha ao chamar Gemini. Ultimo erro: {ultimo_erro}")
+    raise RuntimeError("Resposta vazia da Gemini.")
 
 async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
@@ -133,7 +119,7 @@ def main():
     app.add_handler(CommandHandler("reset", reset))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, responder))
 
-    print("Zapgr Bot com Gemini esta rodando...")
+    print("Zapgr Bot com Gemini 2.5 Flash esta rodando...")
     app.run_polling()
 
 if __name__ == "__main__":
