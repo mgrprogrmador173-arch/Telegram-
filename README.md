@@ -1,68 +1,50 @@
-# Zapgr Bot com Gemini
+# Zapgr Bot com Gemma
 
 Bot: `@Zapgr_bot`
 
-## 1. Instalar
+Este bot usa Telegram + Google AI Studio com modelo **Gemma**.
 
-```bash
-pip install -r requirements.txt
-```
+## Secrets obrigatorios no GitHub
 
-## 2. Criar o arquivo `.env`
+Abra:
 
-Copie o arquivo `.env.example` para `.env` na mesma pasta do `bot.py`.
+https://github.com/mgrprogrmador173-arch/Telegram-/settings/secrets/actions
 
-Exemplo de conteudo:
+Crie estes secrets:
 
 ```env
 TELEGRAM_BOT_TOKEN=SEU_TOKEN_DO_BOT_TELEGRAM
-GEMINI_API_KEY=SUA_CHAVE_GEMINI_AQUI
-# opcional (padrao: gemini-2.5-flash)
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_API_KEY=SUA_CHAVE_DO_GOOGLE_AI_STUDIO
 ```
 
-## 3. Rodar
+A chave continua se chamando `GEMINI_API_KEY`, porque e a chave da API do Google AI Studio.
 
-```bash
-python bot.py
+## Modelo usado
+
+O workflow esta configurado para usar:
+
+```env
+GOOGLE_AI_MODEL=gemma-3-27b-it
 ```
 
-Na inicializacao, o bot valida se o modelo configurado em `GEMINI_MODEL` existe e se sua chave tem acesso a ele.
+## Rodar no GitHub Actions
 
-## Sobre "abrir com Gemini 1.5 e depois 2.5"
+Abra:
 
-Este projeto agora usa **apenas** o modelo definido em `GEMINI_MODEL` (padrao `gemini-2.5-flash`).
+https://github.com/mgrprogrmador173-arch/Telegram-/actions/workflows/run-bot.yml
 
-Se estiver `gemini-1.5-flash` no ambiente/workflow, o bot converte automaticamente para `gemini-2.5-flash` e registra um warning no log.
+Clique em:
 
-Se voce perceber comportamento diferente, normalmente e por um destes motivos:
-- `GEMINI_MODEL` definido no ambiente com outro valor;
-- falta de acesso ao modelo escolhido na chave da API;
-- logs antigos de deploy misturados com logs novos.
+```text
+Run workflow
+```
 
-Com a validacao de modelo no startup, o processo falha cedo quando o modelo nao estiver acessivel.
-
-Se voce perceber comportamento diferente, normalmente e por um destes motivos:
-- `GEMINI_MODEL` definido no ambiente com outro valor;
-- falta de acesso ao modelo escolhido na chave da API;
-- logs antigos de deploy misturados com logs novos.
-
-Com a validacao de modelo no startup, o processo falha cedo quando o modelo nao estiver acessivel.
-
-## Comandos
+## Comandos do bot
 
 - `/start` - iniciar
 - `/help` - ajuda
 - `/reset` - apagar memoria da conversa
 
-## Hospedagem
+## Observacao
 
-Você pode subir no GitHub e hospedar em:
-
-- Render
-- Railway
-- Fly.io
-- VPS
-- Docker
-
-Atenção: o GitHub não mantém o bot rodando sozinho. Ele só guarda o código.
+O GitHub Actions e bom para teste, mas nao e hospedagem 24h ideal. Ele pode parar quando atingir o limite de execucao.
