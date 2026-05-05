@@ -16,6 +16,14 @@ jobs:
       - name: Baixar codigo
         uses: actions/checkout@v4
 
+      - name: Mostrar versao do codigo
+        run: |
+          echo "Commit atual: $GITHUB_SHA"
+          echo "Branch atual: $GITHUB_REF_NAME"
+          echo "Modelo configurado no bot.py:"
+          grep -n "GEMINI_MODEL" bot.py || true
+          grep -n "gemini-" bot.py || true
+
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
