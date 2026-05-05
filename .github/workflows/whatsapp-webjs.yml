@@ -30,30 +30,7 @@ jobs:
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
-        run: npm run start:whatsapp &
-
-      - name: Aguardar QR ou codigo
         run: |
-          for i in {1..60}; do
-            if [ -f qr-code/whatsapp-qr.png ] || [ -f qr-code/pairing-code.txt ]; then
-              echo "Login gerado."
-              exit 0
-            fi
-            echo "Aguardando QR Code ou codigo por numero..."
-            sleep 3
-          done
-          echo "Login nao foi gerado dentro do tempo esperado."
-          exit 1
-
-      - name: Exportar login do WhatsApp
-        uses: actions/upload-artifact@v4
-        with:
-          name: whatsapp-login-code
-          path: qr-code/
-
-      - name: Manter bot rodando
-        run: |
-          echo "Bot rodando. Baixe o artifact whatsapp-login-code."
-          echo "Se tiver pairing-code.txt, use: Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone."
-          echo "Se tiver whatsapp-qr.png, escaneie o QR Code."
-          sleep 21000
+          echo "O bot vai gerar o codigo no log abaixo."
+          echo "Use imediatamente no WhatsApp: Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone."
+          npm run start:whatsapp
