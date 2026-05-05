@@ -8,6 +8,7 @@ const { GoogleGenAI } = require('@google/genai');
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash-lite';
 const QR_DIR = process.env.QR_DIR || 'qr-code';
+const WHATSAPP_PAIRING_NUMBER = process.env.WHATSAPP_PAIRING_NUMBER || '';
 
 if (!GEMINI_API_KEY) {
   throw new Error('GEMINI_API_KEY nao encontrada nos Secrets.');
@@ -17,6 +18,7 @@ fs.mkdirSync(QR_DIR, { recursive: true });
 
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 const memory = new Map();
+let pairingRequested = false;
 
 const SYSTEM_PROMPT = `
 Voce e o atendente virtual da MGR Design Studio.
@@ -76,6 +78,24 @@ const client = new Client({
 });
 
 client.on('qr', async (qr) => {
+  if (WHATSAPP_PAIRING_NUMBER && !pairingRequested) {
+    pairingRequested = true;
+    try {
+      const code = await client.requestPairingCode(WHATSAPP_PAIRING_NUMBER, true);
+      const codePath = path.join(QR_DIR, 'pairing-code.txt');
+      fs.writeFileSync(codePath, code, 'utf8');
+      console.log('============================================================');
+      console.log('CODIGO PARA CONECTAR COM NUMERO:');
+      console.log(code);
+      console.log('Use no WhatsApp: Aparelhos conectados > Conectar aparelho > Conectar com numero de telefone');
+      console.log('Tambem foi salvo em Artifacts > whatsapp-login-code > pairing-code.txt');
+      console.log('============================================================');
+      return;
+    } catch (error) {
+      console.error('Nao consegui gerar codigo por numero. Vou gerar QR Code normal.', error);
+    }
+  }
+
   console.log('Escaneie este QR Code com o WhatsApp:');
   qrcode.generate(qr, { small: true });
 
@@ -92,7 +112,7 @@ client.on('qr', async (qr) => {
 
   console.log('QR Code salvo como artifact em:');
   console.log(pngPath);
-  console.log('No celular, abra Artifacts > whatsapp-qr-code e baixe whatsapp-qr.png');
+  console.log('No celular, abra Artifacts > whatsapp-login-code e baixe whatsapp-qr.png');
 });
 
 client.on('ready', () => {
