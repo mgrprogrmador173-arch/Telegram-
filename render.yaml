@@ -1,20 +1,7 @@
 services:
-  - type: web
-    name: mgr-whatsapp-bot
+  - type: worker
+    name: mgr-telegram-bot
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python whatsapp_test.py
-    envVars:
-      - key: WHATSAPP_TOKEN
-        sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
-        sync: false
-      - key: WHATSAPP_VERIFY_TOKEN
-        value: mgr-teste
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: GOOGLE_AI_MODEL
-        value: gemma-3-27b-it
-      - key: TTS_SPEED
-        value: '1.5'
+    startCommand: python bot.py
