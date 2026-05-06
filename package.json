@@ -2,16 +2,16 @@
   "name": "mgr-whatsapp-webjs-bot",
   "version": "1.0.0",
   "description": "Bot de atendimento MGR Design Studio usando whatsapp-web.js e Groq.",
-  "main": "whatsapp_web_bot.js",
+  "main": "whatsapp_groq_voice_fixed.js",
   "scripts": {
-    "start:whatsapp": "node whatsapp_web_bot.js",
-    "start:whatsapp-voice": "node whatsapp_web_voice_loop.js"
+    "start:whatsapp": "node whatsapp_groq_voice_fixed.js",
+    "start:whatsapp-voice": "node whatsapp_groq_voice_fixed.js"
   },
   "dependencies": {
     "google-tts-api": "^2.0.2",
     "groq-sdk": "^0.32.0",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
-    "whatsapp-web.js": "^1.26.0"
+    "whatsapp-web.js": "latest"
   }
 }
