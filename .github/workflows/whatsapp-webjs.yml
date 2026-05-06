@@ -56,6 +56,12 @@ jobs:
               s = s.replace("async function answer(id, text) {\n", "async function answer(id, text) {\n  saveChatMessage({ userId: id, direction: 'in', type: 'text', text });\n")
           if "saveChatMessage({ userId: id, direction: 'out'" not in s:
               s = s.replace("  addMem(id, `MGR: ${out}`);\n  return out;", "  addMem(id, `MGR: ${out}`);\n  saveChatMessage({ userId: id, direction: 'out', type: 'text', text: out });\n  return out;")
+          if "client.on('authenticated'" not in s:
+              marker = "client.on('ready', () => { ready = true; console.log('Bot conectado com Groq e audio.'); });"
+              replacement = "client.on('authenticated', () => { fs.writeFileSync(path.join(qrDir, 'connected.txt'), new Date().toISOString(), 'utf8'); console.log('WhatsApp autenticado.'); });\n\n" + marker
+              s = s.replace(marker, replacement)
+          if "fs.writeFileSync(path.join(qrDir, 'connected.txt')" in s and "Bot conectado com Groq e audio" in s:
+              s = s.replace("client.on('ready', () => { ready = true; console.log('Bot conectado com Groq e audio.'); });", "client.on('ready', () => { ready = true; fs.writeFileSync(path.join(qrDir, 'connected.txt'), new Date().toISOString(), 'utf8'); console.log('Bot conectado com Groq e audio.'); });")
           p.write_text(s)
           PY
 
@@ -91,6 +97,7 @@ jobs:
           TTS_SPEED: '1.5'
         run: |
           mkdir -p qr-code tmp-audio .wwebjs_auth .wwebjs_cache chat-history
+          rm -f qr-code/connected.txt
           if [ "$PROXY_OK" = "true" ]; then
             export WHATSAPP_PROXY_SERVER="$SECRET_PROXY"
             echo "Iniciando bot com proxy."
@@ -109,6 +116,10 @@ jobs:
           git checkout -- whatsapp_groq_voice.js || true
           LAST_UPDATE=""
           for i in {1..1200}; do
+            if [ -f qr-code/connected.txt ]; then
+              echo "WhatsApp conectado confirmado. Parando publicacao de QR."
+              break
+            fi
             if [ -f qr-code/qr-latest.png ]; then
               CURRENT_UPDATE=$(cat qr-code/qr-updated.txt 2>/dev/null || echo "")
               if [ "$CURRENT_UPDATE" != "$LAST_UPDATE" ]; then
@@ -125,8 +136,8 @@ jobs:
                 echo "QR publicado: https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
               fi
             fi
-            if grep -q "Bot conectado" whatsapp.log 2>/dev/null; then
-              echo "WhatsApp conectado"
+            if grep -q "Bot conectado" whatsapp.log 2>/dev/null || grep -q "WhatsApp autenticado" whatsapp.log 2>/dev/null; then
+              echo "WhatsApp conectado pelo log"
               break
             fi
             tail -n 30 whatsapp.log || true
