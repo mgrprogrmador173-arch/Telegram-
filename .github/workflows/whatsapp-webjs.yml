@@ -21,14 +21,16 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Restaurar login do WhatsApp
+      - name: Restaurar login e historico
         uses: actions/cache@v4
         with:
           path: |
             .wwebjs_auth
             .wwebjs_cache
-          key: whatsapp-login-${{ runner.os }}-${{ github.repository }}
+            chat-history
+          key: whatsapp-data-${{ runner.os }}-${{ github.repository }}
           restore-keys: |
+            whatsapp-data-${{ runner.os }}-
             whatsapp-login-${{ runner.os }}-
 
       - name: Configurar Node
@@ -41,6 +43,21 @@ jobs:
 
       - name: Instalar FFmpeg
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Ativar historico local
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('whatsapp_groq_voice.js')
+          s = p.read_text()
+          if "require('./chat_history')" not in s:
+              s = s.replace("const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');", "const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');\nconst { saveChatMessage } = require('./chat_history');")
+          if "saveChatMessage({ userId: id, direction: 'in'" not in s:
+              s = s.replace("async function answer(id, text) {\n", "async function answer(id, text) {\n  saveChatMessage({ userId: id, direction: 'in', type: 'text', text });\n")
+          if "saveChatMessage({ userId: id, direction: 'out'" not in s:
+              s = s.replace("  addMem(id, `MGR: ${out}`);\n  return out;", "  addMem(id, `MGR: ${out}`);\n  saveChatMessage({ userId: id, direction: 'out', type: 'text', text: out });\n  return out;")
+          p.write_text(s)
+          PY
 
       - name: Testar proxy
         env:
@@ -66,13 +83,14 @@ jobs:
           GROQ_CHAT_MODEL: llama-3.1-8b-instant
           GROQ_TRANSCRIBE_MODEL: whisper-large-v3-turbo
           QR_DIR: qr-code
+          CHAT_HISTORY_DIR: chat-history
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
           SECRET_PROXY: ${{ secrets.WHATSAPP_PROXY_SERVER }}
           QR_INTERVAL_SECONDS: 90
           PHONE_AFTER_QR_DELAY_SECONDS: 30
           TTS_SPEED: '1.5'
         run: |
-          mkdir -p qr-code tmp-audio .wwebjs_auth .wwebjs_cache
+          mkdir -p qr-code tmp-audio .wwebjs_auth .wwebjs_cache chat-history
           if [ "$PROXY_OK" = "true" ]; then
             export WHATSAPP_PROXY_SERVER="$SECRET_PROXY"
             echo "Iniciando bot com proxy."
@@ -82,7 +100,7 @@ jobs:
           fi
           nohup node whatsapp_groq_voice.js > whatsapp.log 2>&1 &
           echo $! > whatsapp.pid
-          echo "Bot iniciado com Groq, reconhecimento e resposta por voz"
+          echo "Bot iniciado com Groq, reconhecimento, resposta por voz e historico local"
 
       - name: Publicar QR atualizado
         run: |
@@ -118,11 +136,11 @@ jobs:
           echo "## QR Code direto" >> $GITHUB_STEP_SUMMARY
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "O login sera salvo no cache do GitHub Actions quando o workflow finalizar normalmente." >> $GITHUB_STEP_SUMMARY
+          echo "Login e historico local serao salvos no cache quando o workflow finalizar normalmente." >> $GITHUB_STEP_SUMMARY
 
       - name: Manter bot rodando
         run: |
-          echo "Bot rodando com Groq e voz"
+          echo "Bot rodando com Groq, voz e historico local"
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
           tail -f whatsapp.log &
           sleep 21000
