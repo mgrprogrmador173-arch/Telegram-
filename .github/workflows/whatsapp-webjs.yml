@@ -35,6 +35,7 @@ jobs:
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
+          WHATSAPP_PROXY_SERVER: ${{ secrets.WHATSAPP_PROXY_SERVER }}
           QR_INTERVAL_SECONDS: 60
         run: |
           mkdir -p qr-code
