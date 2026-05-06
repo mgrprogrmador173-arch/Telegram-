@@ -106,12 +106,14 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -- whatsapp_groq_voice.js || true
           LAST_UPDATE=""
           for i in {1..1200}; do
             if [ -f qr-code/qr-latest.png ]; then
               CURRENT_UPDATE=$(cat qr-code/qr-updated.txt 2>/dev/null || echo "")
               if [ "$CURRENT_UPDATE" != "$LAST_UPDATE" ]; then
                 LAST_UPDATE="$CURRENT_UPDATE"
+                git checkout -- whatsapp_groq_voice.js || true
                 git pull --rebase || true
                 git add qr-code/*.png qr-code/*.txt || true
                 if ! git diff --cached --quiet; then
