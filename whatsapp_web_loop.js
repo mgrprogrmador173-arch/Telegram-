@@ -10,6 +10,7 @@ const GOOGLE_AI_MODEL = process.env.GOOGLE_AI_MODEL || 'gemini-2.5-flash-lite';
 const QR_DIR = process.env.QR_DIR || 'qr-code';
 const PHONE = (process.env.WHATSAPP_PAIRING_NUMBER || '').replace(/\D/g, '');
 const QR_INTERVAL_SECONDS = Number(process.env.QR_INTERVAL_SECONDS || 60);
+const WHATSAPP_PROXY_SERVER = process.env.WHATSAPP_PROXY_SERVER || '';
 
 if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY nao encontrada.');
 fs.mkdirSync(QR_DIR, { recursive: true });
@@ -74,11 +75,24 @@ async function tryPhoneCode() {
   }
 }
 
+const puppeteerArgs = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-dev-shm-usage',
+  '--disable-gpu',
+  '--lang=pt-BR,pt',
+];
+
+if (WHATSAPP_PROXY_SERVER) {
+  puppeteerArgs.push(`--proxy-server=${WHATSAPP_PROXY_SERVER}`);
+  console.log('Proxy configurado para o WhatsApp Web JS.');
+}
+
 const client = new Client({
   authStrategy: new LocalAuth({ clientId: 'mgr-whatsapp-webjs' }),
   puppeteer: {
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    args: puppeteerArgs,
   },
 });
 
