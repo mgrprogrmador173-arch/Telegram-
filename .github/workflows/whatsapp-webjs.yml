@@ -38,7 +38,6 @@ jobs:
             echo "PROXY_OK=false" >> $GITHUB_ENV
             exit 0
           fi
-
           echo "Proxy configurado. Testando acesso ao WhatsApp Web..."
           if curl -I -L --max-time 15 --proxy "$WHATSAPP_PROXY_SERVER" https://web.whatsapp.com >/dev/null 2>&1; then
             echo "Proxy OK. O bot vai usar o proxy."
@@ -48,6 +47,16 @@ jobs:
             echo "PROXY_OK=false" >> $GITHUB_ENV
           fi
 
+      - name: Ajustar intervalos
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('whatsapp_web_loop.js')
+          s = p.read_text()
+          s = s.replace('await saveQr(qr);\n  await tryPhoneCode();', 'await saveQr(qr);\n  console.log("Aguardando 30s antes de tentar por telefone...");\n  await new Promise(resolve => setTimeout(resolve, 30000));\n  await tryPhoneCode();')
+          p.write_text(s)
+          PY
+
       - name: Iniciar bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -55,7 +64,7 @@ jobs:
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
           SECRET_PROXY: ${{ secrets.WHATSAPP_PROXY_SERVER }}
-          QR_INTERVAL_SECONDS: 60
+          QR_INTERVAL_SECONDS: 90
         run: |
           mkdir -p qr-code
           if [ "$PROXY_OK" = "true" ]; then
@@ -95,7 +104,7 @@ jobs:
               break
             fi
             tail -n 30 whatsapp.log || true
-            sleep 10
+            sleep 15
           done
 
       - name: Mostrar link direto
