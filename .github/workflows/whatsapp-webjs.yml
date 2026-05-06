@@ -21,6 +21,16 @@ jobs:
         with:
           persist-credentials: true
 
+      - name: Restaurar login do WhatsApp
+        uses: actions/cache@v4
+        with:
+          path: |
+            .wwebjs_auth
+            .wwebjs_cache
+          key: whatsapp-login-${{ runner.os }}-${{ github.repository }}
+          restore-keys: |
+            whatsapp-login-${{ runner.os }}-
+
       - name: Configurar Node
         uses: actions/setup-node@v4
         with:
@@ -62,7 +72,7 @@ jobs:
           PHONE_AFTER_QR_DELAY_SECONDS: 30
           TTS_SPEED: '1.5'
         run: |
-          mkdir -p qr-code tmp-audio
+          mkdir -p qr-code tmp-audio .wwebjs_auth .wwebjs_cache
           if [ "$PROXY_OK" = "true" ]; then
             export WHATSAPP_PROXY_SERVER="$SECRET_PROXY"
             echo "Iniciando bot com proxy."
@@ -107,6 +117,8 @@ jobs:
         run: |
           echo "## QR Code direto" >> $GITHUB_STEP_SUMMARY
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "O login sera salvo no cache do GitHub Actions quando o workflow finalizar normalmente." >> $GITHUB_STEP_SUMMARY
 
       - name: Manter bot rodando
         run: |
