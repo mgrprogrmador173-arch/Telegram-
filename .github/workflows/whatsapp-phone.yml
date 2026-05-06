@@ -1,0 +1,110 @@
+name: Rodar WhatsApp por Telefone
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: whatsapp-phone
+  cancel-in-progress: false
+
+jobs:
+  whatsapp-phone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+
+      - name: Restaurar login e historico
+        uses: actions/cache@v4
+        with:
+          path: |
+            .wwebjs_auth
+            .wwebjs_cache
+            chat-history
+          key: whatsapp-data-${{ runner.os }}-${{ github.repository }}
+          restore-keys: |
+            whatsapp-data-${{ runner.os }}-
+            whatsapp-login-${{ runner.os }}-
+
+      - name: Configurar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Restaurar dependencias Node
+        uses: actions/cache@v4
+        id: node-cache
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: node-deps-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: |
+            node-deps-${{ runner.os }}-
+
+      - name: Instalar dependencias
+        if: steps.node-cache.outputs.cache-hit != 'true'
+        run: npm install
+
+      - name: Instalar FFmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "FFmpeg ja esta instalado."
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+
+      - name: Aplicar modo telefone sem QR
+        run: python patch_phone_login.py
+
+      - name: Iniciar bot por telefone
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_CHAT_MODEL: llama-3.1-8b-instant
+          GROQ_TRANSCRIBE_MODEL: whisper-large-v3-turbo
+          QR_DIR: qr-code
+          CHAT_HISTORY_DIR: chat-history
+          WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
+          PHONE_AFTER_QR_DELAY_SECONDS: 5
+          PHONE_CODE_INTERVAL_SECONDS: 75
+          TTS_SPEED: '1.5'
+        run: |
+          mkdir -p qr-code tmp-audio .wwebjs_auth .wwebjs_cache chat-history
+          rm -f qr-code/connected.txt qr-code/pairing-code-latest.txt
+          nohup node whatsapp_groq_voice_fixed.js > whatsapp.log 2>&1 &
+          echo $! > whatsapp.pid
+          echo "Bot iniciado em modo telefone, sem QR"
+
+      - name: Mostrar codigo por telefone
+        run: |
+          LAST_UPDATE=""
+          for i in {1..1200}; do
+            if [ -f qr-code/connected.txt ]; then
+              echo "WhatsApp conectado confirmado."
+              break
+            fi
+            if [ -f qr-code/pairing-code-latest.txt ]; then
+              CURRENT_UPDATE=$(cat qr-code/pairing-code-updated.txt 2>/dev/null || echo "")
+              if [ "$CURRENT_UPDATE" != "$LAST_UPDATE" ]; then
+                LAST_UPDATE="$CURRENT_UPDATE"
+                echo "============================================"
+                echo "CODIGO ATUAL PARA CONECTAR POR TELEFONE:"
+                cat qr-code/pairing-code-latest.txt
+                echo "============================================"
+              fi
+            fi
+            tail -n 30 whatsapp.log || true
+            sleep 15
+          done
+
+      - name: Manter bot rodando
+        run: |
+          echo "Bot rodando com Groq, voz e historico local"
+          tail -f whatsapp.log &
+          sleep 21000
