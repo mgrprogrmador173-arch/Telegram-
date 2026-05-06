@@ -29,16 +29,42 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
+      - name: Testar proxy
+        env:
+          WHATSAPP_PROXY_SERVER: ${{ secrets.WHATSAPP_PROXY_SERVER }}
+        run: |
+          if [ -z "$WHATSAPP_PROXY_SERVER" ]; then
+            echo "Proxy nao configurado. Rodando sem proxy."
+            echo "PROXY_OK=false" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          echo "Proxy configurado. Testando acesso ao WhatsApp Web..."
+          if curl -I -L --max-time 15 --proxy "$WHATSAPP_PROXY_SERVER" https://web.whatsapp.com >/dev/null 2>&1; then
+            echo "Proxy OK. O bot vai usar o proxy."
+            echo "PROXY_OK=true" >> $GITHUB_ENV
+          else
+            echo "Proxy falhou ou demorou demais. O bot vai rodar sem proxy."
+            echo "PROXY_OK=false" >> $GITHUB_ENV
+          fi
+
       - name: Iniciar bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
           QR_DIR: qr-code
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
-          WHATSAPP_PROXY_SERVER: ${{ secrets.WHATSAPP_PROXY_SERVER }}
+          SECRET_PROXY: ${{ secrets.WHATSAPP_PROXY_SERVER }}
           QR_INTERVAL_SECONDS: 60
         run: |
           mkdir -p qr-code
+          if [ "$PROXY_OK" = "true" ]; then
+            export WHATSAPP_PROXY_SERVER="$SECRET_PROXY"
+            echo "Iniciando bot com proxy."
+          else
+            unset WHATSAPP_PROXY_SERVER
+            echo "Iniciando bot sem proxy."
+          fi
           nohup node whatsapp_web_loop.js > whatsapp.log 2>&1 &
           echo $! > whatsapp.pid
           echo "Bot iniciado"
