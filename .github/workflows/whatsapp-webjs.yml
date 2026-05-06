@@ -29,6 +29,9 @@ jobs:
       - name: Instalar dependencias
         run: npm install
 
+      - name: Instalar FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       - name: Testar proxy
         env:
           WHATSAPP_PROXY_SERVER: ${{ secrets.WHATSAPP_PROXY_SERVER }}
@@ -47,17 +50,7 @@ jobs:
             echo "PROXY_OK=false" >> $GITHUB_ENV
           fi
 
-      - name: Ajustar intervalos
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('whatsapp_web_loop.js')
-          s = p.read_text()
-          s = s.replace('await saveQr(qr);\n  await tryPhoneCode();', 'await saveQr(qr);\n  console.log("Aguardando 30s antes de tentar por telefone...");\n  await new Promise(resolve => setTimeout(resolve, 30000));\n  await tryPhoneCode();')
-          p.write_text(s)
-          PY
-
-      - name: Iniciar bot
+      - name: Iniciar bot com voz
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GOOGLE_AI_MODEL: gemini-2.5-flash-lite
@@ -65,8 +58,10 @@ jobs:
           WHATSAPP_PAIRING_NUMBER: ${{ secrets.WHATSAPP_PAIRING_NUMBER }}
           SECRET_PROXY: ${{ secrets.WHATSAPP_PROXY_SERVER }}
           QR_INTERVAL_SECONDS: 90
+          PHONE_AFTER_QR_DELAY_SECONDS: 30
+          TTS_SPEED: '1.5'
         run: |
-          mkdir -p qr-code
+          mkdir -p qr-code tmp-audio
           if [ "$PROXY_OK" = "true" ]; then
             export WHATSAPP_PROXY_SERVER="$SECRET_PROXY"
             echo "Iniciando bot com proxy."
@@ -74,9 +69,9 @@ jobs:
             unset WHATSAPP_PROXY_SERVER
             echo "Iniciando bot sem proxy."
           fi
-          nohup node whatsapp_web_loop.js > whatsapp.log 2>&1 &
+          nohup node whatsapp_web_voice_loop.js > whatsapp.log 2>&1 &
           echo $! > whatsapp.pid
-          echo "Bot iniciado"
+          echo "Bot iniciado com reconhecimento e resposta por voz"
 
       - name: Publicar QR atualizado
         run: |
@@ -114,7 +109,7 @@ jobs:
 
       - name: Manter bot rodando
         run: |
-          echo "Bot rodando"
+          echo "Bot rodando com voz"
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png"
           tail -f whatsapp.log &
           sleep 21000
