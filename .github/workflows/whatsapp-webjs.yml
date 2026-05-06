@@ -68,24 +68,49 @@ jobs:
             sudo apt-get install -y ffmpeg
           fi
 
-      - name: Ativar historico local
+      - name: Ativar historico local e eventos de mensagem
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('whatsapp_groq_voice.js')
           s = p.read_text()
+
           if "require('./chat_history')" not in s:
               s = s.replace("const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');", "const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');\nconst { saveChatMessage } = require('./chat_history');")
+
+          if "const handledMessages = new Set();" not in s:
+              s = s.replace("let lastQrAt = 0;", "let lastQrAt = 0;\nconst handledMessages = new Set();")
+
+          if "function markHandled(msg)" not in s:
+              marker = "function download(url, out) { return new Promise((res, rej) => { const f = fs.createWriteStream(out); https.get(url, r => { if (r.statusCode !== 200) return rej(new Error('download falhou')); r.pipe(f); f.on('finish', () => f.close(res)); }).on('error', rej); }); }"
+              helper = marker + "\n\nfunction markHandled(msg) {\n  const id = msg?.id?._serialized || msg?.id?.id || `${msg.from}-${msg.timestamp}-${msg.body}`;\n  if (handledMessages.has(id)) return false;\n  handledMessages.add(id);\n  if (handledMessages.size > 500) handledMessages.clear();\n  return true;\n}"
+              s = s.replace(marker, helper)
+
           if "saveChatMessage({ userId: id, direction: 'in'" not in s:
               s = s.replace("async function answer(id, text) {\n", "async function answer(id, text) {\n  saveChatMessage({ userId: id, direction: 'in', type: 'text', text });\n")
+
           if "saveChatMessage({ userId: id, direction: 'out'" not in s:
               s = s.replace("  addMem(id, `MGR: ${out}`);\n  return out;", "  addMem(id, `MGR: ${out}`);\n  saveChatMessage({ userId: id, direction: 'out', type: 'text', text: out });\n  return out;")
+
           if "client.on('authenticated'" not in s:
               marker = "client.on('ready', () => { ready = true; console.log('Bot conectado com Groq e audio.'); });"
               replacement = "client.on('authenticated', () => { fs.writeFileSync(path.join(qrDir, 'connected.txt'), new Date().toISOString(), 'utf8'); console.log('WhatsApp autenticado.'); });\n\n" + marker
               s = s.replace(marker, replacement)
+
           if "fs.writeFileSync(path.join(qrDir, 'connected.txt')" in s and "Bot conectado com Groq e audio" in s:
               s = s.replace("client.on('ready', () => { ready = true; console.log('Bot conectado com Groq e audio.'); });", "client.on('ready', () => { ready = true; fs.writeFileSync(path.join(qrDir, 'connected.txt'), new Date().toISOString(), 'utf8'); console.log('Bot conectado com Groq e audio.'); });")
+
+          if "if (!markHandled(msg)) return;" not in s:
+              s = s.replace("client.on('message', async msg => {\n  try {", "client.on('message', async msg => {\n  if (!markHandled(msg)) return;\n  if (msg.fromMe) { console.log('Mensagem propria ignorada.'); return; }\n  console.log('Mensagem recebida via message:', msg.from, msg.body || '[midia]');\n  try {")
+
+          if "client.on('message_create'" not in s:
+              start = s.find("client.on('message', async msg => {")
+              end = s.find("\n\nclient.initialize();", start)
+              if start != -1 and end != -1:
+                  block = s[start:end]
+                  block2 = block.replace("client.on('message'", "client.on('message_create'", 1).replace("via message", "via message_create")
+                  s = s[:end] + "\n\n" + block2 + s[end:]
+
           p.write_text(s)
           PY
 
