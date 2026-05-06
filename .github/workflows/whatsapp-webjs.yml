@@ -38,11 +38,35 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Restaurar dependencias Node
+        id: node-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.npm
+          key: node-deps-${{ runner.os }}-${{ hashFiles('package.json') }}
+          restore-keys: |
+            node-deps-${{ runner.os }}-
+
       - name: Instalar dependencias
+        if: steps.node-cache.outputs.cache-hit != 'true'
         run: npm install
 
+      - name: Conferir dependencias
+        if: steps.node-cache.outputs.cache-hit == 'true'
+        run: |
+          echo "Dependencias Node restauradas do cache."
+          npm list --depth=0 || npm install
+
       - name: Instalar FFmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        run: |
+          if command -v ffmpeg >/dev/null 2>&1; then
+            echo "FFmpeg ja esta instalado."
+          else
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
 
       - name: Ativar historico local
         run: |
@@ -149,7 +173,7 @@ jobs:
           echo "## QR Code direto" >> $GITHUB_STEP_SUMMARY
           echo "https://raw.githubusercontent.com/mgrprogrmador173-arch/Telegram-/main/qr-code/qr-latest.png" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Login e historico local serao salvos no cache quando o workflow finalizar normalmente." >> $GITHUB_STEP_SUMMARY
+          echo "Login, dependencias Node e historico local tentam ser preservados no cache." >> $GITHUB_STEP_SUMMARY
 
       - name: Manter bot rodando
         run: |
